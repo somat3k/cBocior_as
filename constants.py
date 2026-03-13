@@ -126,6 +126,66 @@ BOT_ANALYSIS_COOLDOWN_SECONDS: int = int(
 BOT_MAX_CONCURRENT_AGENTS: int = int(_opt("BOT_MAX_CONCURRENT_AGENTS", "4"))
 LOG_LEVEL: str = _opt("LOG_LEVEL", "INFO").upper()
 
+# ─── Training Symbols ─────────────────────────────────────────────────────
+# All symbols for which models are trained on historical OHLCV data.
+# cTrader symbol names may differ from exchange names — see cTrader docs.
+TRAINING_SYMBOLS: tuple[str, ...] = (
+    "XAUUSD",   # Gold (XAU vs USD)
+    "GOOGL",    # Alphabet / Google
+    "AMD",      # Advanced Micro Devices
+    "US30",     # Dow Jones Industrial Average
+    "US100",    # Nasdaq 100
+    "BTCUSD",   # Bitcoin
+    "ETHUSD",   # Ethereum
+    "FLOKIUSD", # Floki
+    "BONKUSD",  # Bonk
+    "SHIBUSD",  # Shiba Inu
+    "ADAUSD",   # Cardano
+    "LTCUSD",   # Litecoin
+    "XRPUSD",   # XRP
+    "SOLUSD",   # Solana
+    "EURUSD",   # Euro / USD
+    "GBPUSD",   # British Pound / USD
+    "NZDCAD",   # New Zealand Dollar / Canadian Dollar
+    "USDJPY",   # USD / Japanese Yen
+)
+
+# HyperLiquid symbol names corresponding to the TRAINING_SYMBOLS list above
+# (used when the cTrader / cAlgo primary feed is unavailable).
+# Note: HyperLiquid primarily supports crypto perpetuals.  For forex and
+# equity-index symbols the mapping is best-effort; if HyperLiquid does not
+# list the coin the fetcher returns an empty result and the pipeline falls
+# back to previously saved CSV data.
+HYPERLIQUID_SYMBOL_MAP: dict[str, str] = {
+    "XAUUSD":   "XAU",
+    "GOOGL":    "GOOGL",
+    "AMD":      "AMD",
+    "US30":     "DJI",     # Dow Jones — check HyperLiquid market list
+    "US100":    "NDX",     # Nasdaq 100 — check HyperLiquid market list
+    "BTCUSD":   "BTC",
+    "ETHUSD":   "ETH",
+    "FLOKIUSD": "FLOKI",
+    "BONKUSD":  "BONK",
+    "SHIBUSD":  "SHIB",
+    "ADAUSD":   "ADA",
+    "LTCUSD":   "LTC",
+    "XRPUSD":   "XRP",
+    "SOLUSD":   "SOL",
+    "EURUSD":   "EURUSD",  # HyperLiquid forex pair identifier
+    "GBPUSD":   "GBPUSD",  # HyperLiquid forex pair identifier
+    "NZDCAD":   "NZDCAD",  # HyperLiquid forex pair identifier
+    "USDJPY":   "USDJPY",  # HyperLiquid forex pair identifier
+}
+
+# ─── Account Capitals ─────────────────────────────────────────────────────
+INITIAL_CAPITAL_ACC1: float = float(_opt("INITIAL_CAPITAL_ACC1", "10000"))
+INITIAL_CAPITAL_ACC2: float = float(_opt("INITIAL_CAPITAL_ACC2", "50"))
+
+# ─── Redis Cache ──────────────────────────────────────────────────────────
+REDIS_URL: str = _opt("REDIS_URL", "redis://localhost:6379/0")
+REDIS_CACHE_TTL_SECONDS: int = int(_opt("REDIS_CACHE_TTL_SECONDS", "3600"))
+REDIS_ENABLED: bool = _opt("REDIS_ENABLED", "true").lower() == "true"
+
 # ─── Indicator windows (defaults) ─────────────────────────────────────────
 RSI_PERIOD: int = 14
 MACD_FAST: int = 12
