@@ -66,6 +66,9 @@ exports/*.json.gz
 !exports/*/*.joblib
 !exports/*/*.npz
 !exports/*/*.pkl
+# Always track metadata and the central registry
+!exports/registry.json
+!exports/*/*.json
 
 # CSV data (can be large)
 data/*.csv

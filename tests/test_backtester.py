@@ -306,3 +306,57 @@ class TestBacktesterMetrics:
         nn, gbm = _make_mock_models([0.5] * n, [0.5] * n)
         result = bt.run(np.zeros((n, 3)), np.ones(n) * 1.10, nn, gbm)
         assert result.max_drawdown_pct >= 0.0
+
+
+# ---------------------------------------------------------------------------
+# Backtester — Spread + Slippage (P3)
+# ---------------------------------------------------------------------------
+
+class TestBacktesterSpreadSlippage:
+    def test_spread_reduces_win_rate_vs_zero_spread(self) -> None:
+        """A trade with spread costs should produce a lower or equal return."""
+        n = 100
+        prices = 1.10 + np.arange(n) * 0.0001
+
+        nn_zero, gbm_zero = _make_mock_models([0.75] * n, [0.75] * n)
+        nn_spread, gbm_spread = _make_mock_models([0.75] * n, [0.75] * n)
+
+        bt_zero = Backtester(
+            initial_capital=10_000.0, stop_loss_pips=20.0,
+            take_profit_pips=10.0, spread_pips=0.0, slippage_pips=0.0, seed=0,
+        )
+        bt_spread = Backtester(
+            initial_capital=10_000.0, stop_loss_pips=20.0,
+            take_profit_pips=10.0, spread_pips=2.0, slippage_pips=0.5, seed=0,
+        )
+        result_zero = bt_zero.run(np.zeros((n, 3)), prices, nn_zero, gbm_zero)
+        result_spread = bt_spread.run(np.zeros((n, 3)), prices, nn_spread, gbm_spread)
+
+        # Spread/slippage can never improve returns
+        assert result_spread.total_return_pct <= result_zero.total_return_pct + 0.01
+
+    def test_zero_spread_zero_slippage_no_extra_cost(self) -> None:
+        """With spread=0 and slippage=0 entry price equals mid price."""
+        bt = Backtester(spread_pips=0.0, slippage_pips=0.0, seed=42)
+        assert bt._entry_price(1.10000, 1) == pytest.approx(1.10000)
+        assert bt._entry_price(1.10000, -1) == pytest.approx(1.10000)
+
+    def test_buy_entry_higher_than_mid(self) -> None:
+        """BUY fill price > mid due to spread/slippage costs."""
+        bt = Backtester(spread_pips=2.0, slippage_pips=0.0, seed=0)
+        fill = bt._entry_price(1.10000, 1)
+        assert fill > 1.10000
+
+    def test_sell_entry_lower_than_mid(self) -> None:
+        """SELL fill price < mid due to spread/slippage costs."""
+        bt = Backtester(spread_pips=2.0, slippage_pips=0.0, seed=0)
+        fill = bt._entry_price(1.10000, -1)
+        assert fill < 1.10000
+
+    def test_slippage_bounded_by_max(self) -> None:
+        """Slippage should never exceed slippage_pips."""
+        from src.models.backtester import _PIP
+        bt = Backtester(spread_pips=0.0, slippage_pips=1.0, seed=7)
+        for _ in range(100):
+            fill = bt._entry_price(1.10000, 1)
+            assert fill <= 1.10000 + 1.0 * _PIP + 1e-9

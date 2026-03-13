@@ -21,6 +21,18 @@ Trade exit priority
    → **CANCELLED** (early close; PnL may be positive or negative).
    If the reversed signal is strong enough, a new position in the
    opposite direction is opened immediately.
+
+Realistic fills  (P3)
+----------------------
+*spread_pips* and *slippage_pips* are applied at order entry so that
+simulated results reflect real-world trading costs:
+
+* **Spread** — BUY entries fill at ``close + spread/2``; SELL entries fill
+  at ``close - spread/2``.  SL/TP distances are measured from the fill
+  price, not the mid-point close.
+* **Slippage** — an additional random slippage of up to *slippage_pips*
+  pips (uniform distribution, same direction as the spread cost) is added
+  at every entry to model imperfect fills on market orders.
 """
 
 from __future__ import annotations
@@ -110,6 +122,14 @@ class Backtester:
     risk_pct : float
         Fraction of balance risked per trade, used for position sizing
         (default 1 %).
+    spread_pips : float
+        Half-spread applied at entry: BUY fills at ``mid + spread/2``,
+        SELL at ``mid - spread/2`` (default 1.0 pip = typical FX spread).
+    slippage_pips : float
+        Maximum additional random slippage at entry (default 0.5 pip).
+        Actual slippage is drawn from Uniform[0, slippage_pips].
+    seed : int | None
+        Random seed for slippage reproducibility in tests (default None).
     """
 
     def __init__(
@@ -121,6 +141,9 @@ class Backtester:
         sell_threshold: float = 0.38,
         reversal_exit_threshold: float = 0.50,
         risk_pct: float = 1.0,
+        spread_pips: float = 1.0,
+        slippage_pips: float = 0.5,
+        seed: int | None = None,
     ) -> None:
         self.initial_capital = initial_capital
         self.stop_loss_pips = stop_loss_pips
@@ -129,6 +152,9 @@ class Backtester:
         self.sell_threshold = sell_threshold
         self.reversal_exit_threshold = reversal_exit_threshold
         self.risk_pct = risk_pct
+        self.spread_pips = spread_pips
+        self.slippage_pips = slippage_pips
+        self._rng = np.random.default_rng(seed)
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -235,9 +261,9 @@ class Backtester:
                         if prob <= self.sell_threshold:
                             in_trade = True
                             trade_direction = -1
-                            entry_price = price
-                            sl_price = price + self.stop_loss_pips * _PIP
-                            tp_price = price - self.take_profit_pips * _PIP
+                            entry_price = self._entry_price(price, -1)
+                            sl_price = entry_price + self.stop_loss_pips * _PIP
+                            tp_price = entry_price - self.take_profit_pips * _PIP
                             total_trades += 1
 
                 else:  # SELL open
@@ -266,25 +292,26 @@ class Backtester:
                         if prob >= self.buy_threshold:
                             in_trade = True
                             trade_direction = 1
-                            entry_price = price
-                            sl_price = price - self.stop_loss_pips * _PIP
-                            tp_price = price + self.take_profit_pips * _PIP
+                            entry_price = self._entry_price(price, 1)
+                            sl_price = entry_price - self.stop_loss_pips * _PIP
+                            tp_price = entry_price + self.take_profit_pips * _PIP
                             total_trades += 1
 
             if not in_trade:
                 if prob >= self.buy_threshold:
                     in_trade = True
                     trade_direction = 1
-                    entry_price = price
-                    sl_price = price - self.stop_loss_pips * _PIP
-                    tp_price = price + self.take_profit_pips * _PIP
+                    # Apply spread + slippage at entry  (P3)
+                    entry_price = self._entry_price(price, 1)
+                    sl_price = entry_price - self.stop_loss_pips * _PIP
+                    tp_price = entry_price + self.take_profit_pips * _PIP
                     total_trades += 1
                 elif prob <= self.sell_threshold:
                     in_trade = True
                     trade_direction = -1
-                    entry_price = price
-                    sl_price = price + self.stop_loss_pips * _PIP
-                    tp_price = price - self.take_profit_pips * _PIP
+                    entry_price = self._entry_price(price, -1)
+                    sl_price = entry_price + self.stop_loss_pips * _PIP
+                    tp_price = entry_price - self.take_profit_pips * _PIP
                     total_trades += 1
 
             balance = max(balance, 1.0)
@@ -349,6 +376,24 @@ class Backtester:
         # volume (units) to risk exactly risk_amount on a stop_loss_pips move
         volume = risk_amount / (self.stop_loss_pips * _PIP + 1e-10)
         return pips * _PIP * volume
+
+    def _entry_price(self, mid: float, direction: int) -> float:
+        """
+        Compute the realistic fill price for a new entry.  (P3)
+
+        Parameters
+        ----------
+        mid : float
+            Mid-point close price.
+        direction : int
+            +1 for BUY (we pay the ask = mid + half-spread + slippage);
+            -1 for SELL (we receive the bid = mid - half-spread - slippage).
+        """
+        half_spread = (self.spread_pips / 2.0) * _PIP
+        slip = float(self._rng.uniform(0.0, self.slippage_pips)) * _PIP
+        if direction == 1:
+            return mid + half_spread + slip
+        return mid - half_spread - slip
 
 
 # ---------------------------------------------------------------------------

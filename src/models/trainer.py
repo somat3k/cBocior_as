@@ -56,10 +56,11 @@ from constants import (
     TF_1M,
     TF_5M,
 )
+from src.models.backtester import Backtester, BacktestResult
 from src.models.indicators import compute_indicators, get_feature_columns
 from src.models.neural_network import NeuralNetwork
 from src.models.quantum_algo import QuantumParticleSwarm
-from src.models.backtester import Backtester, BacktestResult
+from src.models.registry import ModelRegistry
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -101,6 +102,11 @@ class ModelTrainer:
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.use_qpso = use_qpso
         self.trained_models: dict[str, dict[str, Any]] = {}
+
+    @property
+    def _registry_dir(self) -> Path:
+        """Root directory for the model registry (parent of per-symbol dirs)."""
+        return self.export_dir
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -333,6 +339,7 @@ class ModelTrainer:
         # Save NN
         nn_path = self.export_dir / f"{self.symbol}_{timeframe}_nn"
         result["nn"].save(nn_path)
+        nn_path_full = Path(str(nn_path) + ".npz")
 
         # Save GBM
         gbm_path = self.export_dir / MODEL_TEMPLATE.format(
@@ -350,6 +357,40 @@ class ModelTrainer:
         feat_path = self.export_dir / f"{self.symbol}_{timeframe}_features.joblib"
         joblib.dump(result["feature_cols"], feat_path)
 
+        # Record metadata + hashes in the central registry  (K3 + K4 + K8)
+        bt = result.get("backtest")
+        metrics: dict[str, Any] = {
+            "nn_val_acc": result.get("nn_val_acc"),
+            "gbm_val_acc": result.get("gbm_val_acc"),
+            "feature_count": len(result.get("feature_cols", [])),
+        }
+        if bt is not None:
+            metrics.update({
+                "bt_win_rate": bt.win_rate,
+                "bt_max_drawdown_pct": bt.max_drawdown_pct,
+                "bt_total_return_pct": bt.total_return_pct,
+                "bt_profit_factor": bt.profit_factor,
+                "bt_cancelled_rate": bt.cancelled_rate,
+            })
+        registry = ModelRegistry(self._registry_dir)
+        nn_file = nn_path_full if nn_path_full.exists() else None
+        if nn_file is None:
+            logger.warning(
+                "NN .npz file not found for registry; skipping nn hash",
+                expected_path=str(nn_path_full),
+            )
+        registry.record(
+            symbol=self.symbol,
+            timeframe=timeframe,
+            files={
+                "nn": nn_file or nn_path_full,
+                "gbm": gbm_path,
+                "scaler": scaler_path,
+                "features": feat_path,
+            },
+            metrics=metrics,
+        )
+
         logger.info(
             "Model artefacts exported",
             timeframe=timeframe,
@@ -365,7 +406,14 @@ class ModelTrainer:
     def load_models(
         self, timeframes: tuple[str, ...] = SUPPORTED_TIMEFRAMES
     ) -> dict[str, dict[str, Any]]:
-        """Load all exported models from MODEL_EXPORT_DIR."""
+        """Load all exported models from MODEL_EXPORT_DIR.
+
+        Performs SHA-256 integrity verification for each timeframe before
+        loading (K8).  A mismatch is logged as an error but does not abort
+        the load — the caller receives the best-available models so the bot
+        can continue operating.
+        """
+        registry = ModelRegistry(self._registry_dir)
         loaded: dict[str, dict[str, Any]] = {}
         for tf in timeframes:
             nn_path = self.export_dir / f"{self.symbol}_{tf}_nn.npz"
@@ -381,6 +429,15 @@ class ModelTrainer:
                     "Model artefacts not found, skipping", timeframe=tf
                 )
                 continue
+
+            # Integrity check (K8) — log warning on failure but still load
+            if not registry.verify(self.symbol, tf):
+                logger.warning(
+                    "Integrity check failed; proceeding with caution",
+                    symbol=self.symbol,
+                    timeframe=tf,
+                )
+
             # Load feature columns from file if available, fall back to computed defaults
             if feat_path.exists():
                 feature_cols = joblib.load(feat_path)

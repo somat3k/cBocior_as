@@ -98,7 +98,7 @@ class RiskManager:
                 f"−{RISK_DAILY_LOSS_LIMIT_USD}"
             )
 
-        # 3. Max drawdown
+        # 3. Max drawdown + emergency stop
         if self.account.peak_balance > 0:
             drawdown_pct = (
                 (self.account.peak_balance - self.account.equity)
@@ -114,6 +114,14 @@ class RiskManager:
             if drawdown_pct >= RISK_MAX_DRAWDOWN_PCT:
                 reasons.append(
                     f"Max drawdown {drawdown_pct:.1f}% exceeded — HALT"
+                )
+            # I10: Emergency stop — drawdown > 2× configured limit
+            if drawdown_pct >= RISK_MAX_DRAWDOWN_PCT * 2.0:
+                flags.emergency_halt = True
+                reasons.append(
+                    f"EMERGENCY HALT: drawdown {drawdown_pct:.1f}% > "
+                    f"2× limit ({RISK_MAX_DRAWDOWN_PCT * 2.0:.1f}%) — "
+                    "all trading suspended"
                 )
 
         # 4. Low confidence
@@ -133,6 +141,7 @@ class RiskManager:
             or flags.daily_loss_limit_approaching
             or flags.drawdown_warning
             or flags.low_confidence
+            or flags.emergency_halt
         )
         if blocking:
             reason_str = "; ".join(reasons) if reasons else "Risk limit triggered"
@@ -140,6 +149,7 @@ class RiskManager:
                 "Trade blocked by risk manager",
                 action=payload.action,
                 reasons=reasons,
+                emergency_halt=flags.emergency_halt,
             )
             return False, reason_str, flags
 

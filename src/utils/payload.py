@@ -84,6 +84,7 @@ class RiskFlags(BaseModel):
     daily_loss_limit_approaching: bool = False
     timeframe_divergence: bool = False
     low_confidence: bool = False
+    emergency_halt: bool = False     # I10: drawdown > 2× RISK_MAX_DRAWDOWN_PCT
     custom: list[str] = Field(default_factory=list)
 
     @property
@@ -94,6 +95,7 @@ class RiskFlags(BaseModel):
             self.daily_loss_limit_approaching,
             self.timeframe_divergence,
             self.low_confidence,
+            self.emergency_halt,
             bool(self.custom),
         ])
 
@@ -247,6 +249,7 @@ def merge_payloads(
             p.risk_flags.timeframe_divergence for p in payloads
         ),
         low_confidence=any(p.risk_flags.low_confidence for p in payloads),
+        emergency_halt=any(p.risk_flags.emergency_halt for p in payloads),
         custom=list(
             {flag for p in payloads for flag in p.risk_flags.custom}
         ),
