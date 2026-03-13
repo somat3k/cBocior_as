@@ -184,10 +184,10 @@ class MarketAnalyzer:
                 return TradingSession.CLOSED
 
         # UTC session hours (approximate)
-        if 8 <= hour < 12:
-            return TradingSession.OVERLAP_LONDON_NY if hour >= 13 else TradingSession.LONDON
         if 13 <= hour < 17:
             return TradingSession.OVERLAP_LONDON_NY
+        if 8 <= hour < 17:
+            return TradingSession.LONDON
         if 17 <= hour < 22:
             return TradingSession.NEW_YORK
         if 22 <= hour or hour < 2:

@@ -186,7 +186,7 @@ def build_feature_matrix(
         base_indexed = base.set_index("timestamp").sort_index()
         merged = base_indexed.join(
             other, how="left"
-        ).fillna(method="ffill")
+        ).ffill()
         base = merged.reset_index()
 
     return base
