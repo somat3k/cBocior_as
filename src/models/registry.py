@@ -301,8 +301,10 @@ class ModelRegistry:
                 v = int(meta_path.name.split("_v")[1].split("_")[0])
             except (IndexError, ValueError):
                 continue
-            # Remove all artefacts with that version suffix
-            for p in arch_sym_dir.glob(f"*_v{v}*"):
+            # Remove all artefacts with that version suffix; use an explicit
+            # stem-based pattern to avoid accidentally matching other symbols.
+            stem = f"{symbol}_{timeframe}_v{v}_"
+            for p in arch_sym_dir.glob(f"{stem}*"):
                 try:
                     p.unlink()
                     logger.debug("Pruned old model archive", path=str(p))

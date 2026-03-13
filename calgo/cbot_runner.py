@@ -584,13 +584,14 @@ class CBotRunner:
             def log_message(self, *args: Any) -> None:  # silence access log
                 pass
 
+        host = os.environ.get("HEALTH_HOST", "127.0.0.1")
         try:
-            server = http.server.HTTPServer(("0.0.0.0", port), _Handler)
-            logger.info("Health endpoint started", port=port, path="/health")
+            server = http.server.HTTPServer((host, port), _Handler)
+            logger.info("Health endpoint started", host=host, port=port, path="/health")
             server.serve_forever()
         except OSError as exc:
             logger.warning(
-                "Could not start health server", port=port, error=str(exc)
+                "Could not start health server", host=host, port=port, error=str(exc)
             )
 
     # ------------------------------------------------------------------

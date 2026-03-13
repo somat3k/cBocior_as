@@ -226,16 +226,9 @@ def main(
         use_qpso=use_qpso,
     )
 
-    # Train directly on pre-fetched data (avoids a redundant second fetch)
-    results: dict[str, dict[str, dict[str, Any]]] = {}
-    for sym in symbols:
-        if sym not in all_data or not all_data[sym]:
-            continue
-        print(f"  Training {sym} ...", flush=True)
-        # pylint: disable=protected-access
-        symbol_result = trainer._train_symbol(sym, all_data[sym])
-        if symbol_result:
-            results[sym] = symbol_result
+    # Train directly on pre-fetched data using the public run_with_data() API
+    print("  Running multi-symbol training ...", flush=True)
+    results = trainer.run_with_data(all_data)
 
     logger.info(
         "MultiSymbolTrainer complete",

@@ -143,7 +143,7 @@ class MultiSymbolFetcher:
                 symbol=symbol,
                 timeframe=timeframe,
             )
-            return pd.DataFrame(cached)
+            return MultiSymbolFetcher._standardise_df(pd.DataFrame(cached))
 
         # ── 2. cTrader primary feed ───────────────────────────────────
         df = self._try_ctrader(symbol, timeframe, count)
@@ -246,8 +246,8 @@ class MultiSymbolFetcher:
     def _try_load_csv(
         self, symbol: str, timeframe: str
     ) -> pd.DataFrame | None:
-        csv_path = self._csv_path(symbol, timeframe)
-        if not csv_path.exists():
+        csv_path = self._latest_csv_path(symbol, timeframe)
+        if csv_path is None or not csv_path.exists():
             return None
         try:
             df = pd.read_csv(csv_path, parse_dates=["timestamp"])
@@ -263,6 +263,23 @@ class MultiSymbolFetcher:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _latest_csv_path(self, symbol: str, timeframe: str) -> Path | None:
+        """
+        Return the path of the most recently saved CSV for *symbol* / *timeframe*.
+
+        Falls back to today's expected path so the write-side still works.
+        """
+        stem = f"{symbol}_{timeframe}_"
+        matches = sorted(
+            self.data_dir.glob(f"{stem}*.csv"),
+            key=lambda p: p.stat().st_mtime if p.exists() else 0,
+            reverse=True,
+        )
+        if matches:
+            return matches[0]
+        # No prior CSV found — return today's path so saves still land correctly
+        return self._csv_path(symbol, timeframe)
 
     def _csv_path(self, symbol: str, timeframe: str) -> Path:
         from datetime import date

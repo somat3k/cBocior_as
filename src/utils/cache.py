@@ -149,7 +149,9 @@ def cache_get_json(cache: CacheBackend, key: str) -> Any:
     if raw is None:
         return None
     try:
-        return json.loads(raw)
+        # Decode bytes → str before parsing so both stdlib json and ujson work
+        text = raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw
+        return json.loads(text)
     except Exception as exc:
         logger.warning("Cache JSON decode failed", key=key, error=str(exc))
         return None

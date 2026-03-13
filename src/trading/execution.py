@@ -36,6 +36,9 @@ class Position:
     closed_at: datetime | None = None
     close_price: float | None = None
     pnl: float | None = None
+    # Broker-assigned position ID returned on fill confirmation.
+    # Required for trailing-stop amendments via ProtoOAAmendPositionSLTPReq.
+    broker_position_id: int | None = None
 
 
 class Execution:
@@ -339,11 +342,24 @@ class Execution:
         """
         Send a position-amend request to update the stop-loss price.  (H9)
 
-        In dry-run mode or when no client is attached the call is skipped
-        (the in-memory ``Position.stop_loss`` has already been updated by the
-        caller so the next fill-check will use the correct level).
+        In dry-run mode, when no client is attached, or when the broker
+        ``position_id`` has not yet been populated (i.e. the fill confirmation
+        hasn't arrived), the call is skipped.  The in-memory
+        ``Position.stop_loss`` has already been updated by the caller so the
+        next fill-check will use the correct level.
+
+        The ``broker_position_id`` field on :class:`Position` is populated by
+        the fill-confirmation callback (``on_execution_event``) in the runner.
+        Until that callback fires, trailing-stop broker amendments are deferred.
         """
         if self._dry_run or self._client is None:
+            return
+        pos = self._positions.get(order_id)
+        if pos is None or pos.broker_position_id is None:
+            logger.debug(
+                "Trailing stop amendment deferred — broker_position_id not yet known",
+                order_id=order_id,
+            )
             return
         try:
             from ctrader_open_api.messages.OpenApiMessages_pb2 import (
@@ -351,15 +367,13 @@ class Execution:
             )
             req = ProtoOAAmendPositionSLTPReq()
             req.ctidTraderAccountId = self._account_id
-            # The order_id is an internal string; the real position ID would
-            # be tracked once the broker confirms the fill.  This is a stub
-            # that should be wired to the broker-returned positionId.
+            req.positionId = pos.broker_position_id
             req.stopLoss = new_sl
-            req.comment = order_id[:31]
             self._client._client.send(req)
             logger.debug(
                 "Trailing stop amended",
                 order_id=order_id,
+                broker_position_id=pos.broker_position_id,
                 new_sl=round(new_sl, 5),
             )
         except Exception as exc:  # noqa: BLE001

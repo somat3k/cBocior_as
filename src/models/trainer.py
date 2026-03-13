@@ -118,7 +118,7 @@ class ModelTrainer:
 
     @property
     def _registry_dir(self) -> Path:
-        """Root directory for the model registry (parent of per-symbol dirs)."""
+        """Root directory for the model registry (i.e. ``self.export_dir``)."""
         return self.export_dir
 
     # ------------------------------------------------------------------
