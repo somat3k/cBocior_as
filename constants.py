@@ -84,7 +84,11 @@ LANGCHAIN_ENDPOINT: str = _opt(
 
 # ─── Trading Parameters ───────────────────────────────────────────────────
 TRADING_SYMBOL: str = _opt("TRADING_SYMBOL", "EURUSD")
-TRADING_VOLUME: int = int(_opt("TRADING_VOLUME", "1000"))
+# TRADING_VOLUME is in centilots (lots × 100).
+#   1 = 0.01 lot (micro-lot / 1 000 currency units) — minimum recommended
+#  10 = 0.10 lot (mini-lot  / 10 000 currency units)
+# 100 = 1.00 lot (standard  / 100 000 currency units)
+TRADING_VOLUME: int = int(_opt("TRADING_VOLUME", "1"))
 TRADING_MAX_SPREAD_PIPS: float = float(_opt("TRADING_MAX_SPREAD_PIPS", "2.0"))
 TRADING_STOP_LOSS_PIPS: float = float(_opt("TRADING_STOP_LOSS_PIPS", "30"))
 TRADING_TAKE_PROFIT_PIPS: float = float(_opt("TRADING_TAKE_PROFIT_PIPS", "60"))

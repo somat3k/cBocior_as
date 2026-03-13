@@ -19,9 +19,6 @@ from typing import Any
 from constants import BOT_ANALYSIS_COOLDOWN_SECONDS
 from src.utils.logger import get_logger
 from src.utils.payload import (
-    IndicatorSnapshot,
-    ModelSignals,
-    PayloadBuilder,
     RiskFlags,
     TradingAction,
     TradingPayload,
@@ -57,7 +54,6 @@ class DecisionEngine:
         agent_payload: TradingPayload,
         signal_data: dict[str, Any],
         risk_flags: RiskFlags,
-        current_spread_pips: float = 0.0,
     ) -> TradingPayload:
         """
         Produce a final trade decision.
@@ -70,8 +66,6 @@ class DecisionEngine:
             Output from SignalEngine.compute().
         risk_flags : RiskFlags
             Flags evaluated by RiskManager.
-        current_spread_pips : float
-            Live spread for the symbol.
 
         Returns
         -------

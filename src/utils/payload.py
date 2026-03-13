@@ -263,7 +263,7 @@ def merge_payloads(
         all_indicators.extend(p.indicators)
         all_signals.extend(p.model_signals)
 
-    return (
+    base = (
         PayloadBuilder()
         .source(AgentID.ORCHESTRATOR)
         .symbol(symbol)
@@ -276,19 +276,7 @@ def merge_payloads(
             vote_distribution={k.value: v for k, v in action_votes.items()},
         )
         .build()
-        ._model_copy_with_lists(all_indicators, all_signals)
     )
-
-
-# Monkey-patch helper (avoid modifying Pydantic internals)
-def _model_copy_with_lists(
-    payload: TradingPayload,
-    indicators: list[IndicatorSnapshot],
-    signals: list[ModelSignals],
-) -> TradingPayload:
-    return payload.model_copy(
-        update={"indicators": indicators, "model_signals": signals}
+    return base.model_copy(
+        update={"indicators": all_indicators, "model_signals": all_signals}
     )
-
-
-TradingPayload._model_copy_with_lists = _model_copy_with_lists  # type: ignore[attr-defined]

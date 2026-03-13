@@ -137,19 +137,20 @@ class NeuralNetwork:
         self,
         X: np.ndarray,
         training: bool = False,
-    ) -> tuple[np.ndarray, list[np.ndarray], list[np.ndarray]]:
+    ) -> tuple[np.ndarray, list[np.ndarray], list[np.ndarray], list[np.ndarray | None]]:
         """
         Forward pass through the network.
 
         Returns
         -------
-        output : np.ndarray  — final layer activations
-        zs     : list        — pre-activation values per layer
-        acts   : list        — post-activation values per layer (incl. input)
+        output  : np.ndarray             — final layer activations
+        zs      : list                   — pre-activation values per layer
+        acts    : list                   — post-activation values per layer (incl. input)
+        masks   : list[np.ndarray|None]  — dropout masks per hidden layer (None for output)
         """
         acts = [X]
         zs = []
-        num_hidden = len(self.weights) - 1  # all but last
+        masks: list[np.ndarray | None] = []
 
         for i, (W, b) in enumerate(zip(self.weights, self.biases)):
             z = acts[-1] @ W + b
@@ -158,6 +159,7 @@ class NeuralNetwork:
             is_output = i == len(self.weights) - 1
             if is_output:
                 a = self.output_act(z)
+                masks.append(None)
             else:
                 a = self.hidden_act(z)
                 if training and self.dropout_rate > 0:
@@ -165,9 +167,12 @@ class NeuralNetwork:
                         self._rng.random(a.shape) > self.dropout_rate
                     ).astype(float)
                     a = a * mask / (1.0 - self.dropout_rate)
+                    masks.append(mask)
+                else:
+                    masks.append(None)
             acts.append(a)
 
-        return acts[-1], zs, acts
+        return acts[-1], zs, acts, masks
 
     # ------------------------------------------------------------------
     # Backward pass
@@ -179,6 +184,7 @@ class NeuralNetwork:
         y: np.ndarray,
         zs: list[np.ndarray],
         acts: list[np.ndarray],
+        masks: list[np.ndarray | None],
     ) -> tuple[list[np.ndarray], list[np.ndarray]]:
         """Compute gradients via backpropagation."""
         m = X.shape[0]
@@ -193,6 +199,9 @@ class NeuralNetwork:
             db[i] = delta.mean(axis=0, keepdims=True)
             if i > 0:
                 delta = delta @ self.weights[i].T * self.hidden_act_grad(zs[i - 1])
+                # Apply the same dropout mask that was used in the forward pass
+                if masks[i - 1] is not None:
+                    delta = delta * masks[i - 1] / (1.0 - self.dropout_rate)
 
         return dW, db
 
@@ -235,14 +244,14 @@ class NeuralNetwork:
             for start in range(0, m, batch_size):
                 end = start + batch_size
                 Xb, yb = X_s[start:end], y_s[start:end]
-                out, zs, acts = self._forward(Xb, training=True)
-                dW, db = self._backward(Xb, yb, zs, acts)
+                out, zs, acts, masks = self._forward(Xb, training=True)
+                dW, db = self._backward(Xb, yb, zs, acts, masks)
                 for i in range(len(self.weights)):
                     self.weights[i] -= self.lr * dW[i]
                     self.biases[i] -= self.lr * db[i]
 
             # Training loss
-            out_tr, _, _ = self._forward(X_train)
+            out_tr, _, _, _ = self._forward(X_train)
             tr_loss = self._bce_loss(y_train, out_tr)
             self.train_loss_history.append(tr_loss)
 
@@ -250,7 +259,7 @@ class NeuralNetwork:
             val_loss = None
             if X_val is not None and y_val is not None:
                 y_val_r = y_val.reshape(-1, 1) if y_val.ndim == 1 else y_val
-                out_val, _, _ = self._forward(X_val)
+                out_val, _, _, _ = self._forward(X_val)
                 val_loss = self._bce_loss(y_val_r, out_val)
                 self.val_loss_history.append(val_loss)
 
@@ -288,7 +297,7 @@ class NeuralNetwork:
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """Return probability scores (output of sigmoid)."""
-        out, _, _ = self._forward(X, training=False)
+        out, _, _, _ = self._forward(X, training=False)
         return out.flatten()
 
     def predict(self, X: np.ndarray, threshold: float = 0.5) -> np.ndarray:

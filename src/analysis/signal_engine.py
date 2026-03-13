@@ -127,7 +127,7 @@ class SignalEngine:
                 tf_scores.append(float(np.clip(macd_score, 0, 100)))
 
             # BB %B
-            if snap.bb_upper and snap.bb_lower and snap.bb_middle:
+            if snap.bb_upper is not None and snap.bb_lower is not None and snap.bb_middle is not None:
                 close_proxy = snap.bb_middle  # use mid as proxy
                 bb_pct = (close_proxy - snap.bb_lower) / (
                     snap.bb_upper - snap.bb_lower + 1e-10

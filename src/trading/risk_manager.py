@@ -17,7 +17,6 @@ from constants import (
     RISK_MAX_POSITION_SIZE,
     TRADING_MAX_SPREAD_PIPS,
     TRADING_STOP_LOSS_PIPS,
-    TRADING_TAKE_PROFIT_PIPS,
     TRADING_VOLUME,
 )
 from src.utils.logger import get_logger

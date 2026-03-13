@@ -322,6 +322,10 @@ class ModelTrainer:
         )
         joblib.dump(result["scaler"], scaler_path)
 
+        # Save feature column list so load_models() can reconstruct predict()
+        feat_path = self.export_dir / f"{self.symbol}_{timeframe}_features.joblib"
+        joblib.dump(result["feature_cols"], feat_path)
+
         logger.info(
             "Model artefacts exported",
             timeframe=timeframe,
@@ -347,15 +351,25 @@ class ModelTrainer:
             scaler_path = self.export_dir / SCALER_TEMPLATE.format(
                 symbol=self.symbol, timeframe=tf
             )
+            feat_path = self.export_dir / f"{self.symbol}_{tf}_features.joblib"
             if not (nn_path.exists() and gbm_path.exists() and scaler_path.exists()):
                 logger.warning(
                     "Model artefacts not found, skipping", timeframe=tf
                 )
                 continue
+            # Load feature columns from file if available, fall back to computed defaults
+            if feat_path.exists():
+                feature_cols = joblib.load(feat_path)
+            else:
+                feature_cols = get_feature_columns(tf)
+                logger.warning(
+                    "Feature columns file missing, using defaults", timeframe=tf
+                )
             loaded[tf] = {
                 "nn": NeuralNetwork.load(nn_path),
                 "gbm": joblib.load(gbm_path),
                 "scaler": joblib.load(scaler_path),
+                "feature_cols": feature_cols,
             }
             logger.info("Models loaded", timeframe=tf)
         return loaded

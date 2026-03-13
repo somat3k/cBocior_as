@@ -61,11 +61,28 @@ class Execution:
         volume: int = TRADING_VOLUME,
         stop_loss_pips: float = TRADING_STOP_LOSS_PIPS,
         take_profit_pips: float = TRADING_TAKE_PROFIT_PIPS,
+        current_price: float = 0.0,
     ) -> Position | None:
         """
         Execute the trade decision in the payload.
 
-        Returns the new Position or None (on HOLD or dry run).
+        Parameters
+        ----------
+        payload : TradingPayload
+            Decision from DecisionEngine.
+        volume : int
+            Volume in cTrader centilots (lots × 100).  Default from
+            ``TRADING_VOLUME`` constant.  E.g. ``1`` = 0.01 lot (micro-lot).
+        stop_loss_pips : float
+            Stop-loss distance in pips.
+        take_profit_pips : float
+            Take-profit distance in pips.
+        current_price : float
+            Live bid/ask mid-price used to compute absolute SL/TP levels.
+            When ``0.0`` the order is sent without pre-computed SL/TP and
+            protection levels must be attached after the fill price is known.
+
+        Returns the new Position or None (on HOLD).
         """
         if payload.action == TradingAction.HOLD:
             logger.debug("HOLD — no order placed")
@@ -74,17 +91,26 @@ class Execution:
         symbol = payload.symbol
         action = payload.action
 
-        # Estimate entry price from last known mid (or 0.0 as placeholder)
-        entry_price = 0.0  # Will be filled by cTrader on execution
-
-        # Compute SL/TP prices (directional)
-        pip = 0.0001  # for 5-decimal FX pairs
-        if action == TradingAction.BUY:
-            sl = entry_price - stop_loss_pips * pip if entry_price else 0.0
-            tp = entry_price + take_profit_pips * pip if entry_price else 0.0
+        # Compute SL/TP absolute prices when a live price is available.
+        # If current_price is unknown (0.0) the protection levels are omitted
+        # and must be set via a separate modify-position request after fill.
+        pip = 0.0001  # for 4/5-decimal FX pairs
+        if current_price > 0.0:
+            if action == TradingAction.BUY:
+                sl = current_price - stop_loss_pips * pip
+                tp = current_price + take_profit_pips * pip
+            else:
+                sl = current_price + stop_loss_pips * pip
+                tp = current_price - take_profit_pips * pip
         else:
-            sl = entry_price + stop_loss_pips * pip if entry_price else 0.0
-            tp = entry_price - take_profit_pips * pip if entry_price else 0.0
+            sl = 0.0
+            tp = 0.0
+            logger.warning(
+                "current_price is 0.0 — SL/TP omitted from order; "
+                "attach protection levels after fill",
+                symbol=symbol,
+                action=action.value,
+            )
 
         order_id = f"{symbol}_{action}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
 
@@ -93,19 +119,25 @@ class Execution:
             symbol=symbol,
             action=action,
             volume=volume,
-            entry_price=entry_price,
+            entry_price=current_price,
             stop_loss=sl,
             take_profit=tp,
         )
 
         if self._dry_run:
-            logger.info(
-                "DRY RUN — order not placed",
-                order_id=order_id,
-                action=action.value,
-                symbol=symbol,
-                volume=volume,
-            )
+            log_kwargs: dict = {
+                "order_id": order_id,
+                "action": action.value,
+                "symbol": symbol,
+                "volume": volume,
+            }
+            if sl:
+                log_kwargs["sl"] = sl
+            if tp:
+                log_kwargs["tp"] = tp
+            if not sl and not tp:
+                log_kwargs["protection"] = "pending_post_fill"
+            logger.info("DRY RUN — order not placed", **log_kwargs)
         else:
             self._send_market_order(symbol, action, volume, sl, tp, order_id)
 
@@ -176,7 +208,7 @@ class Execution:
                 if action == TradingAction.BUY
                 else ProtoOATradeSide.SELL
             )
-            req.volume = volume * 100  # cTrader uses cents of lots
+            req.volume = volume  # already in centilots (lots × 100) as per TRADING_VOLUME constant
             if stop_loss:
                 req.stopLoss = stop_loss
             if take_profit:

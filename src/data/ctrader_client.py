@@ -133,8 +133,16 @@ class CTraderClient:
     # Public API
     # ------------------------------------------------------------------
 
-    def connect(self) -> None:
-        """Start the Twisted reactor and connect to cTrader servers."""
+    def connect(self, install_signal_handlers: bool = True) -> None:
+        """Start the Twisted reactor and connect to cTrader servers.
+
+        Parameters
+        ----------
+        install_signal_handlers : bool
+            Pass ``False`` when the reactor is started from a non-main thread
+            (e.g., a daemon background thread).  Twisted's default signal
+            handler installation raises ``ValueError`` in that case.
+        """
         try:
             from ctrader_open_api import Client, EndPoints, TcpProtocol
         except ImportError as exc:
@@ -156,7 +164,7 @@ class CTraderClient:
             host=self.host,
             port=self.port,
         )
-        reactor.run()
+        reactor.run(installSignalHandlers=install_signal_handlers)
 
     def subscribe_live_bars(self, symbol: str, timeframe: str) -> None:
         """Subscribe to live trendbar updates for a symbol/timeframe."""
@@ -334,8 +342,8 @@ class CTraderClient:
         logger.info("Account authorised", account_id=self.account_id)
         self.state.account_authorized = True
         self._send_get_symbols()
-        if self.on_connected_callback:
-            self.on_connected_callback()
+        # on_connected_callback is fired from _handle_symbols_list, once the
+        # symbol map is populated and subscriptions / fetches can succeed.
 
     def _handle_symbols_list(self, pb: Any) -> None:
         for sym in pb.symbol:
@@ -343,6 +351,10 @@ class CTraderClient:
         logger.info(
             "Symbol map loaded", total_symbols=len(self._symbol_map)
         )
+        # Fire the connected callback now that the symbol map is ready,
+        # so callers can safely call subscribe_live_bars / fetch_historical_bars.
+        if self.on_connected_callback:
+            self.on_connected_callback()
 
     def _handle_trendbars_res(self, pb: Any) -> None:
         symbol_id = pb.symbolId

@@ -173,9 +173,11 @@ class CBotRunner:
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, self._handle_shutdown)
 
-        # Start Twisted reactor in a daemon thread
+        # Start Twisted reactor in a daemon thread.
+        # installSignalHandlers=False is required when reactor.run() is called
+        # from a non-main thread (Twisted raises ValueError otherwise).
         reactor_thread = threading.Thread(
-            target=self._ct_client.connect,
+            target=lambda: self._ct_client.connect(install_signal_handlers=False),
             daemon=True,
             name="ctrader-reactor",
         )
@@ -480,15 +482,35 @@ if __name__ == "__main__":
         fetcher = DataFetcher(ct, TRADING_SYMBOL)
         trainer = ModelTrainer(TRADING_SYMBOL, MODEL_EXPORT_DIR)
 
-        def _train_after_connect() -> None:
-            data = fetcher.fetch_all_timeframes(SUPPORTED_TIMEFRAMES)
-            trainer.train_all(data, SUPPORTED_TIMEFRAMES)
-            logger.info("Training complete — exiting")
-            from twisted.internet import reactor
-            reactor.callFromThread(reactor.stop)
+        def _train_worker() -> None:
+            """Run blocking data-fetch + training in a separate thread.
 
-        ct.on_connected_callback = _train_after_connect
-        ct.connect()
+            fetch_historical_bars() uses time.sleep() internally which must
+            not block the Twisted reactor thread.  Starting it in its own
+            thread keeps the reactor responsive so that API responses arrive.
+            """
+            try:
+                data = fetcher.fetch_all_timeframes(SUPPORTED_TIMEFRAMES)
+                trainer.train_all(data, SUPPORTED_TIMEFRAMES)
+                logger.info("Training complete — stopping reactor")
+            except Exception as exc:
+                logger.error("Training failed", error=str(exc))
+            finally:
+                from twisted.internet import reactor as _reactor
+                _reactor.callFromThread(_reactor.stop)
+
+        def _on_connected_start_training() -> None:
+            """Reactor callback — schedule the worker thread (non-blocking)."""
+            threading.Thread(
+                target=_train_worker,
+                daemon=True,
+                name="train-worker",
+            ).start()
+
+        ct.on_connected_callback = _on_connected_start_training
+        # The reactor must run on the main thread in train-only mode so that
+        # signal handlers (SIGINT/SIGTERM) work correctly.
+        ct.connect(install_signal_handlers=True)
     else:
         runner = CBotRunner(dry_run=args.dry_run)
         runner.run()
