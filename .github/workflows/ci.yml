@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "copilot/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pandas scipy scikit-learn joblib pytest pytest-asyncio \
+                      pydantic pydantic-settings python-dotenv structlog ujson rich \
+                      lightgbm
+
+      - name: Run tests
+        env:
+          # Inject mock values — real secrets not needed for unit tests
+          CTRADER_CLIENT_ID: ci_client_id
+          CTRADER_CLIENT_SECRET: ci_client_secret
+          CTRADER_ACCESS_TOKEN: ci_access_token
+          CTRADER_ACCOUNT_ID: "12345678"
+          CTRADER_ENVIRONMENT: DEMO
+          OPENAI_API_KEY: sk-ci-openai
+          GEMINI_API_KEY: AIza-ci-gemini
+          GROQ_API_KEY: gsk_ci_groq
+          OPENROUTER_API_KEY: sk-or-ci
+          LANGSMITH_API_KEY: ls__ci
+          LANGSMITH_PROJECT: cBocior_as_ci
+          LANGCHAIN_TRACING_V2: "false"
+          LOG_LEVEL: WARNING
+        run: python -m pytest tests/ -v
+
+  # Nightly model training (scheduled — requires real secrets)
+  train:
+    name: Train Models (Nightly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install all dependencies
+        run: pip install -r requirements.txt
+
+      - name: Train models
+        env:
+          CTRADER_CLIENT_ID: ${{ secrets.CTRADER_CLIENT_ID }}
+          CTRADER_CLIENT_SECRET: ${{ secrets.CTRADER_CLIENT_SECRET }}
+          CTRADER_ACCESS_TOKEN: ${{ secrets.CTRADER_ACCESS_TOKEN }}
+          CTRADER_ACCOUNT_ID: ${{ secrets.CTRADER_ACCOUNT_ID }}
+          CTRADER_ENVIRONMENT: ${{ secrets.CTRADER_ENVIRONMENT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
+          LANGCHAIN_TRACING_V2: "true"
+          TRADING_SYMBOL: ${{ secrets.TRADING_SYMBOL }}
+          MODEL_EXPORT_DIR: ./exports
+          DATA_DIR: ./data
+        run: python -m calgo.cbot_runner --train-only
+
+      - name: Upload model artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-models
+          path: exports/
+          retention-days: 30

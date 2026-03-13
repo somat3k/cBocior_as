@@ -1,0 +1,158 @@
+"""
+constants.py — Single source of truth for all configuration constants.
+
+Priority order:
+  1. Environment variables (set by CI/GitHub Actions secrets)
+  2. .env file (local development fallback)
+  3. Hardcoded defaults (safe/non-secret values only)
+
+All GitHub Actions Secrets required by this project are documented in
+SECRETS.md.  Never hard-code secret values here.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# ---------------------------------------------------------------------------
+# Load .env (no-op if running inside GitHub Actions where real env vars exist)
+# ---------------------------------------------------------------------------
+_ENV_FILE = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=_ENV_FILE, override=False)
+
+
+def _req(key: str) -> str:
+    """Return a required environment variable or raise a clear error."""
+    value = os.getenv(key, "")
+    if not value:
+        raise EnvironmentError(
+            f"Required environment variable '{key}' is not set. "
+            "See SECRETS.md and .env.example for setup instructions."
+        )
+    return value
+
+
+def _opt(key: str, default: str = "") -> str:
+    """Return an optional environment variable with a default."""
+    return os.getenv(key, default)
+
+
+# ─── cTrader Open API ──────────────────────────────────────────────────────
+CTRADER_CLIENT_ID: str = _req("CTRADER_CLIENT_ID")
+CTRADER_CLIENT_SECRET: str = _req("CTRADER_CLIENT_SECRET")
+CTRADER_ACCESS_TOKEN: str = _req("CTRADER_ACCESS_TOKEN")
+CTRADER_REFRESH_TOKEN: str = _opt("CTRADER_REFRESH_TOKEN")
+CTRADER_ACCOUNT_ID: int = int(_req("CTRADER_ACCOUNT_ID"))
+CTRADER_ENVIRONMENT: str = _opt("CTRADER_ENVIRONMENT", "DEMO").upper()
+
+# Derived endpoints
+_IS_LIVE = CTRADER_ENVIRONMENT == "LIVE"
+CTRADER_HOST: str = (
+    "live.ctraderapi.com" if _IS_LIVE else "demo.ctraderapi.com"
+)
+CTRADER_PORT: int = 5035
+
+# ─── OpenAI ───────────────────────────────────────────────────────────────
+OPENAI_API_KEY: str = _req("OPENAI_API_KEY")
+OPENAI_MODEL: str = _opt("OPENAI_MODEL", "gpt-4o")
+
+# ─── Google Gemini ────────────────────────────────────────────────────────
+GEMINI_API_KEY: str = _req("GEMINI_API_KEY")
+GEMINI_MODEL: str = _opt("GEMINI_MODEL", "gemini-1.5-pro")
+
+# ─── Groq ─────────────────────────────────────────────────────────────────
+GROQ_API_KEY: str = _req("GROQ_API_KEY")
+GROQ_MODEL: str = _opt("GROQ_MODEL", "llama3-70b-8192")
+
+# ─── OpenRouter ───────────────────────────────────────────────────────────
+OPENROUTER_API_KEY: str = _req("OPENROUTER_API_KEY")
+OPENROUTER_MODEL: str = _opt("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+OPENROUTER_BASE_URL: str = _opt(
+    "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+)
+
+# ─── LangSmith ────────────────────────────────────────────────────────────
+LANGSMITH_API_KEY: str = _req("LANGSMITH_API_KEY")
+LANGSMITH_PROJECT: str = _opt("LANGSMITH_PROJECT", "cBocior_as")
+LANGCHAIN_TRACING_V2: str = _opt("LANGCHAIN_TRACING_V2", "true")
+LANGCHAIN_ENDPOINT: str = _opt(
+    "LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"
+)
+
+# ─── Trading Parameters ───────────────────────────────────────────────────
+TRADING_SYMBOL: str = _opt("TRADING_SYMBOL", "EURUSD")
+TRADING_VOLUME: int = int(_opt("TRADING_VOLUME", "1000"))
+TRADING_MAX_SPREAD_PIPS: float = float(_opt("TRADING_MAX_SPREAD_PIPS", "2.0"))
+TRADING_STOP_LOSS_PIPS: float = float(_opt("TRADING_STOP_LOSS_PIPS", "30"))
+TRADING_TAKE_PROFIT_PIPS: float = float(_opt("TRADING_TAKE_PROFIT_PIPS", "60"))
+
+# ─── Risk Management ──────────────────────────────────────────────────────
+RISK_MAX_DRAWDOWN_PCT: float = float(_opt("RISK_MAX_DRAWDOWN_PCT", "5.0"))
+RISK_MAX_POSITION_SIZE: int = int(_opt("RISK_MAX_POSITION_SIZE", "10000"))
+RISK_DAILY_LOSS_LIMIT_USD: float = float(
+    _opt("RISK_DAILY_LOSS_LIMIT_USD", "500.0")
+)
+
+# ─── Model / Training ─────────────────────────────────────────────────────
+MODEL_EXPORT_DIR: Path = Path(_opt("MODEL_EXPORT_DIR", "./exports"))
+DATA_DIR: Path = Path(_opt("DATA_DIR", "./data"))
+
+# Training schedule (per timeframe)
+TRAIN_1M_TRADES: int = int(_opt("TRAIN_1M_TRADES", "2000"))
+TRAIN_1M_EPOCHS: int = int(_opt("TRAIN_1M_EPOCHS", "200"))
+TRAIN_5M_TRADES: int = int(_opt("TRAIN_5M_TRADES", "1000"))
+TRAIN_5M_EPOCHS: int = int(_opt("TRAIN_5M_EPOCHS", "200"))
+TRAIN_1H_TRADES: int = int(_opt("TRAIN_1H_TRADES", "250"))
+TRAIN_1H_EPOCHS: int = int(_opt("TRAIN_1H_EPOCHS", "200"))
+
+# ─── Timeframe constants ──────────────────────────────────────────────────
+TF_1M: str = "M1"
+TF_5M: str = "M5"
+TF_1H: str = "H1"
+SUPPORTED_TIMEFRAMES: tuple[str, ...] = (TF_1M, TF_5M, TF_1H)
+
+# ─── Bot Behaviour ────────────────────────────────────────────────────────
+BOT_LOOP_INTERVAL_SECONDS: int = int(_opt("BOT_LOOP_INTERVAL_SECONDS", "10"))
+BOT_ANALYSIS_COOLDOWN_SECONDS: int = int(
+    _opt("BOT_ANALYSIS_COOLDOWN_SECONDS", "60")
+)
+BOT_MAX_CONCURRENT_AGENTS: int = int(_opt("BOT_MAX_CONCURRENT_AGENTS", "4"))
+LOG_LEVEL: str = _opt("LOG_LEVEL", "INFO").upper()
+
+# ─── Indicator windows (defaults) ─────────────────────────────────────────
+RSI_PERIOD: int = 14
+MACD_FAST: int = 12
+MACD_SLOW: int = 26
+MACD_SIGNAL: int = 9
+BB_PERIOD: int = 20
+BB_STD: float = 2.0
+EMA_PERIODS: tuple[int, ...] = (9, 21, 50, 200)
+ATR_PERIOD: int = 14
+STOCH_K: int = 14
+STOCH_D: int = 3
+STOCH_SMOOTH: int = 3
+
+# ─── Neural-Network hyper-parameters (numpy implementation) ───────────────
+NN_HIDDEN_LAYERS: tuple[int, ...] = (128, 64, 32)
+NN_LEARNING_RATE: float = 0.001
+NN_DROPOUT_RATE: float = 0.2
+NN_BATCH_SIZE: int = 32
+NN_EARLY_STOP_PATIENCE: int = 20
+
+# ─── Quantum-inspired optimiser ───────────────────────────────────────────
+QA_NUM_QUBITS: int = 8          # logical qubits for annealing simulation
+QA_ITERATIONS: int = 500
+QA_TEMPERATURE_START: float = 10.0
+QA_TEMPERATURE_END: float = 0.01
+
+# ─── Payload / communication ──────────────────────────────────────────────
+PAYLOAD_VERSION: str = "1.0"
+PAYLOAD_ENCODING: str = "utf-8"
+
+# ─── File name templates ──────────────────────────────────────────────────
+CSV_TEMPLATE: str = "{symbol}_{timeframe}_{date}.csv"
+MODEL_TEMPLATE: str = "{symbol}_{timeframe}_model.joblib"
+SCALER_TEMPLATE: str = "{symbol}_{timeframe}_scaler.joblib"

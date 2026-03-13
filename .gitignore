@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+*.so
+.tox/
+.cache/
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env
+!.env.example
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+
+# Logs
+logs/
+*.log
+
+# Model artifacts (large binary files — export only what's needed)
+exports/*.pkl
+exports/*.joblib
+exports/*.npy
+exports/*.npz
+exports/*.json.gz
+# Keep the directory itself
+!exports/.gitkeep
+
+# CSV data (can be large)
+data/*.csv
+data/*.parquet
+!data/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Secrets / credentials
+*.pem
+*.key
+*.crt
+secrets/
+
+# Twisted / Protobuf cache
+*.pyc
+_pb2*.py
