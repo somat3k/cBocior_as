@@ -45,7 +45,14 @@ CTRADER_CLIENT_ID: str = _req("CTRADER_CLIENT_ID")
 CTRADER_CLIENT_SECRET: str = _req("CTRADER_CLIENT_SECRET")
 CTRADER_ACCESS_TOKEN: str = _req("CTRADER_ACCESS_TOKEN")
 CTRADER_REFRESH_TOKEN: str = _opt("CTRADER_REFRESH_TOKEN")
+# Primary account (Account 1, initial capital 10 000)
 CTRADER_ACCOUNT_ID: int = int(_req("CTRADER_ACCOUNT_ID"))
+# Secondary account (Account 2, initial capital 50).
+# Defaults to the same ID as the primary so the bot works when only one
+# account is configured; supply a real second account ID in production.
+CTRADER_ACCOUNT_ID_ACC2: int = int(
+    _opt("CTRADER_ACCOUNT_ID_ACC2", str(_req("CTRADER_ACCOUNT_ID")))
+)
 CTRADER_ENVIRONMENT: str = _opt("CTRADER_ENVIRONMENT", "DEMO").upper()
 
 # Derived endpoints
@@ -160,8 +167,8 @@ HYPERLIQUID_SYMBOL_MAP: dict[str, str] = {
     "XAUUSD":   "XAU",
     "GOOGL":    "GOOGL",
     "AMD":      "AMD",
-    "US30":     "DJI",     # Dow Jones — check HyperLiquid market list
-    "US100":    "NDX",     # Nasdaq 100 — check HyperLiquid market list
+    "US30":     "DJI",     # TODO: verify HyperLiquid coin name for Dow Jones index
+    "US100":    "NDX",     # TODO: verify HyperLiquid coin name for Nasdaq 100 index
     "BTCUSD":   "BTC",
     "ETHUSD":   "ETH",
     "FLOKIUSD": "FLOKI",

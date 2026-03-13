@@ -44,11 +44,34 @@ class Execution:
 
     The ``client`` parameter should be a connected ``CTraderClient`` instance.
     When ``dry_run=True`` no actual orders are placed (useful for testing).
+
+    Parameters
+    ----------
+    client : Any, optional
+        Connected ``CTraderClient``.
+    dry_run : bool
+        When ``True`` orders are logged but not sent to the broker.
+    account_id : int, optional
+        cTrader account ID to trade on.  Defaults to ``client.account_id``
+        when not supplied.  Pass explicitly to target a secondary account
+        while reusing the same cTrader connection.
     """
 
-    def __init__(self, client: Any = None, dry_run: bool = False) -> None:
+    def __init__(
+        self,
+        client: Any = None,
+        dry_run: bool = False,
+        account_id: int | None = None,
+    ) -> None:
         self._client = client
         self._dry_run = dry_run
+        # Resolve the account ID: explicit > client's own > 0 fallback
+        if account_id is not None:
+            self._account_id = account_id
+        elif client is not None:
+            self._account_id = getattr(client, "account_id", 0)
+        else:
+            self._account_id = 0
         self._open_positions: dict[str, Position] = {}
 
     # ------------------------------------------------------------------
@@ -200,7 +223,7 @@ class Execution:
             )
 
             req = ProtoOANewOrderReq()
-            req.ctidTraderAccountId = self._client.account_id
+            req.ctidTraderAccountId = self._account_id
             req.symbolId = self._client._symbol_map.get(symbol, 0)
             req.orderType = ProtoOAOrderType.MARKET
             req.tradeSide = (
@@ -222,6 +245,7 @@ class Execution:
                 action=action.value,
                 volume=volume,
                 order_id=order_id,
+                account_id=self._account_id,
             )
         except Exception as exc:
             logger.error(

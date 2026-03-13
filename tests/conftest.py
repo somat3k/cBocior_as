@@ -23,6 +23,7 @@ _TEST_ENV = {
     "CTRADER_ACCESS_TOKEN": "test_access_token",
     "CTRADER_REFRESH_TOKEN": "test_refresh_token",
     "CTRADER_ACCOUNT_ID": "12345678",
+    "CTRADER_ACCOUNT_ID_ACC2": "87654321",
     "CTRADER_ENVIRONMENT": "DEMO",
     # AI providers (mock keys)
     "OPENAI_API_KEY": "sk-test-openai",

@@ -7,11 +7,6 @@ Drives :class:`~src.models.trainer.ModelTrainer` over the full
 
 The target data source is the cAlgo / cTrader Open API.  HyperLiquid is
 used transparently as a fallback if the cTrader feed fails for a symbol.
-
-Initial account capitals:
-  * Account 1 (``INITIAL_CAPITAL_ACC1``) — 10 000 USD (default)
-  * Account 2 (``INITIAL_CAPITAL_ACC2``) —     50 USD (default)
-
 Redis caching is enabled automatically via :func:`~src.utils.cache.get_cache`.
 
 Usage::
@@ -31,8 +26,6 @@ from typing import Any
 import pandas as pd
 
 from constants import (
-    INITIAL_CAPITAL_ACC1,
-    INITIAL_CAPITAL_ACC2,
     MODEL_EXPORT_DIR,
     SUPPORTED_TIMEFRAMES,
     TRAINING_SYMBOLS,
@@ -84,8 +77,6 @@ class MultiSymbolTrainer:
             "MultiSymbolTrainer initialised",
             symbols=len(symbols),
             timeframes=timeframes,
-            initial_capital_acc1=INITIAL_CAPITAL_ACC1,
-            initial_capital_acc2=INITIAL_CAPITAL_ACC2,
             export_dir=str(export_dir),
         )
 

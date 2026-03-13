@@ -41,10 +41,18 @@ class RiskManager:
     Evaluates risk before trade execution.
 
     Methods return (allowed: bool, reason: str).
+
+    Parameters
+    ----------
+    initial_capital : float, optional
+        Account's starting balance.  Used for position sizing when the live
+        balance has not yet been received from the broker (``account.balance
+        == 0``).  Defaults to ``RISK_MAX_POSITION_SIZE`` guard.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, initial_capital: float = 0.0) -> None:
         self.account = AccountState()
+        self._initial_capital = initial_capital
 
     def update_account(self, state: dict[str, Any]) -> None:
         """Update internal account state from cTrader account data."""
@@ -154,10 +162,13 @@ class RiskManager:
         -------
         int  — units to trade
         """
-        if self.account.balance <= 0 or stop_loss_pips <= 0:
+        # Use live balance when available, fall back to initial_capital,
+        # and finally to the default TRADING_VOLUME.
+        balance = self.account.balance or self._initial_capital
+        if balance <= 0 or stop_loss_pips <= 0:
             return TRADING_VOLUME
 
-        risk_amount = self.account.balance * risk_pct / 100
+        risk_amount = balance * risk_pct / 100
         # Simplified: assume 1 pip = $0.0001 per unit for major pairs
         pip_value = 0.0001
         size = int(risk_amount / (stop_loss_pips * pip_value))

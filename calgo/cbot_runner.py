@@ -73,6 +73,7 @@ from src.models.quantum_algo import PhaseEstimator
 from src.analysis.pattern_detector import PatternDetector
 from src.analysis.market_analyzer import MarketAnalyzer
 from src.analysis.signal_engine import SignalEngine
+from src.trading.account_config import AccountConfig, get_account_configs
 from src.trading.decision_engine import DecisionEngine
 from src.trading.execution import Execution
 from src.trading.risk_manager import RiskManager
@@ -95,6 +96,38 @@ _BUFFER_SIZE: int = 500
 
 
 # ---------------------------------------------------------------------------
+# Per-account trading context
+# ---------------------------------------------------------------------------
+
+class _AccountContext:
+    """
+    Bundles the per-account trading subsystems.
+
+    Each configured account gets its own :class:`~src.trading.risk_manager.RiskManager`
+    (seeded with the account's initial capital for position sizing) and
+    :class:`~src.trading.execution.Execution` (targeting the correct
+    cTrader account ID).
+    """
+
+    def __init__(
+        self,
+        cfg: AccountConfig,
+        ct_client: CTraderClient,
+        dry_run: bool = False,
+    ) -> None:
+        self.cfg = cfg
+        self.risk_manager = RiskManager(initial_capital=cfg.initial_capital)
+        self.execution = Execution(
+            client=ct_client,
+            dry_run=dry_run,
+            account_id=cfg.account_id,
+        )
+
+    def __repr__(self) -> str:
+        return f"_AccountContext({self.cfg.label}, account_id={self.cfg.account_id})"
+
+
+# ---------------------------------------------------------------------------
 # CBot runner
 # ---------------------------------------------------------------------------
 
@@ -104,6 +137,13 @@ class CBotRunner:
 
     The Twisted reactor runs in a background thread; the analysis loop
     runs on the main thread (or asyncio event loop).
+
+    Dual-account trading
+    --------------------
+    The runner creates one :class:`_AccountContext` for each entry returned
+    by :func:`~src.trading.account_config.get_account_configs`.  Both
+    accounts receive the same trading signals; position sizes are scaled
+    independently to each account's initial capital.
     """
 
     def __init__(self, dry_run: bool = False) -> None:
@@ -140,12 +180,19 @@ class CBotRunner:
         self._signal_engine = SignalEngine()
         self._phase_estimator = PhaseEstimator(top_k=5)
 
-        # ── Trading subsystems ───────────────────────────────────────────
-        self._risk_manager = RiskManager()
-        self._decision_engine = DecisionEngine()
-        self._execution = Execution(
-            client=self._ct_client, dry_run=dry_run
+        # ── Dual-account trading contexts ────────────────────────────────
+        account_cfgs = get_account_configs()
+        self._account_contexts: list[_AccountContext] = [
+            _AccountContext(cfg, self._ct_client, dry_run=dry_run)
+            for cfg in account_cfgs
+        ]
+        logger.info(
+            "Trading accounts configured",
+            accounts=[str(ctx.cfg) for ctx in self._account_contexts],
         )
+
+        # Shared decision engine (signal consensus is account-independent)
+        self._decision_engine = DecisionEngine()
 
         # ── Agent orchestrator ───────────────────────────────────────────
         self._orchestrator = AgentOrchestrator()
@@ -398,14 +445,18 @@ class CBotRunner:
             )
 
         # Risk check (preliminary, before agent call)
-        _risk_allowed, _risk_reason, risk_flags = self._risk_manager.evaluate(
-            input_payload, current_spread_pips=0.0
+        # Use the first account's risk manager for the pre-agent check;
+        # each account will be re-checked independently during execution.
+        _risk_allowed, _risk_reason, risk_flags = (
+            self._account_contexts[0].risk_manager.evaluate(
+                input_payload, current_spread_pips=0.0
+            )
         )
 
         # Agent orchestrator (async, potentially 4 API calls)
         agent_payload = await self._orchestrator.run(input_payload)
 
-        # Final decision
+        # Final decision (shared across all accounts)
         decision = self._decision_engine.decide(
             agent_payload=agent_payload,
             signal_data=signal_data,
@@ -421,14 +472,40 @@ class CBotRunner:
             cycle_id=decision.cycle_id,
         )
 
-        # Execute (if not HOLD)
+        # Execute on every configured account (if not HOLD)
         if decision.action != TradingAction.HOLD:
-            self._execution.execute(
-                payload=decision,
-                volume=TRADING_VOLUME,
-                stop_loss_pips=TRADING_STOP_LOSS_PIPS,
-                take_profit_pips=TRADING_TAKE_PROFIT_PIPS,
-            )
+            for ctx in self._account_contexts:
+                # Per-account risk re-check
+                acc_allowed, acc_reason, acc_flags = ctx.risk_manager.evaluate(
+                    decision, current_spread_pips=0.0
+                )
+                if not acc_allowed:
+                    logger.info(
+                        "Trade blocked for account",
+                        account=ctx.cfg.label,
+                        reason=acc_reason,
+                    )
+                    continue
+
+                # Size position relative to this account's capital
+                volume = ctx.risk_manager.compute_position_size(
+                    stop_loss_pips=TRADING_STOP_LOSS_PIPS,
+                    risk_pct=1.0,
+                )
+                ctx.execution.execute(
+                    payload=decision,
+                    volume=volume,
+                    stop_loss_pips=TRADING_STOP_LOSS_PIPS,
+                    take_profit_pips=TRADING_TAKE_PROFIT_PIPS,
+                )
+                logger.info(
+                    "Trade executed",
+                    account=ctx.cfg.label,
+                    account_id=ctx.cfg.account_id,
+                    volume=volume,
+                    action=decision.action.value,
+                    symbol=self.symbol,
+                )
 
     # ------------------------------------------------------------------
     # Shutdown
