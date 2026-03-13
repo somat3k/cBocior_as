@@ -67,6 +67,19 @@ class SignalEngine:
         pattern_score = self._score_patterns(pattern_results)
         components["patterns"] = pattern_score
 
+        # ── Cross-timeframe divergence  (D9) ─────────────────────────────
+        divergence_penalty = self._cross_tf_divergence(indicator_snapshots, model_signals)
+        components["tf_divergence"] = divergence_penalty
+        if divergence_penalty > 0:
+            logger.debug(
+                "Cross-timeframe divergence detected",
+                penalty=divergence_penalty,
+            )
+
+        # ── Session filter  (G9) ─────────────────────────────────────────
+        session_mult = self._session_multiplier()
+        components["session_multiplier"] = round(session_mult, 3)
+
         # ── Regime adjustment ─────────────────────────────────────────────
         regime_weight = self._regime_weight(regime)
 
@@ -78,6 +91,12 @@ class SignalEngine:
         )
         # Apply regime scaling (volatile = dampen towards 50)
         composite = 50 + (composite - 50) * regime_weight
+        # Apply session multiplier (off-hours → soften signal)
+        composite = 50 + (composite - 50) * session_mult
+        # Apply divergence penalty: dampen towards 50 proportionally
+        if divergence_penalty > 0:
+            dampen = 1.0 - min(divergence_penalty, 0.5)
+            composite = 50 + (composite - 50) * dampen
 
         composite = float(np.clip(composite, 0, 100))
         components["composite"] = round(composite, 2)
@@ -98,6 +117,7 @@ class SignalEngine:
             "action": action,
             "confidence": round(confidence, 4),
             "components": components,
+            "timeframe_divergence": divergence_penalty > 0,
         }
 
     # ------------------------------------------------------------------
@@ -195,6 +215,80 @@ class SignalEngine:
             "VOLATILE": 0.5,
             "UNKNOWN": 0.8,
         }.get(regime, 0.8)
+
+    # ------------------------------------------------------------------
+    # Cross-timeframe divergence  (D9)
+    # ------------------------------------------------------------------
+
+    def _cross_tf_divergence(
+        self,
+        snapshots: list[IndicatorSnapshot],
+        model_signals: list[ModelSignals],
+    ) -> float:
+        """
+        Detect conflicting directional signals across timeframes.
+
+        Returns a penalty in [0, 1]: 0 = no divergence, higher = more conflict.
+        Divergence is flagged when:
+        * Model predictions span both sides of 0.5 across timeframes, OR
+        * RSI is oversold on one TF and overbought on another.
+        """
+        # Model probability divergence
+        model_probs = []
+        for sig in model_signals:
+            p = sig.ensemble_prediction if sig.ensemble_prediction is not None else sig.nn_prediction
+            if p is not None:
+                model_probs.append(float(p))
+
+        model_divergence = 0.0
+        if len(model_probs) >= 2:
+            bullish = sum(1 for p in model_probs if p > 0.55)
+            bearish = sum(1 for p in model_probs if p < 0.45)
+            if bullish > 0 and bearish > 0:
+                model_divergence = min(bullish, bearish) / len(model_probs)
+
+        # RSI divergence: one TF oversold (<35), another overbought (>65)
+        rsi_values = [snap.rsi for snap in snapshots if snap.rsi is not None]
+        rsi_divergence = 0.0
+        if len(rsi_values) >= 2:
+            oversold = sum(1 for r in rsi_values if r < 35)
+            overbought = sum(1 for r in rsi_values if r > 65)
+            if oversold > 0 and overbought > 0:
+                rsi_divergence = 0.5
+
+        return float(max(model_divergence, rsi_divergence))
+
+    # ------------------------------------------------------------------
+    # Session filter  (G9)
+    # ------------------------------------------------------------------
+
+    def _session_multiplier(self) -> float:
+        """
+        Return a signal strength multiplier based on the current UTC time.
+
+        Sessions and their multipliers:
+          - London–NY overlap (13:00–16:00 UTC): 1.20  ← highest liquidity
+          - New York (13:00–21:00 UTC):          1.10
+          - London (08:00–16:00 UTC):            1.10
+          - Asian (00:00–08:00 UTC):             0.80
+          - Outside all major sessions:          0.70
+        """
+        from datetime import datetime, timezone as _tz
+        now_utc = datetime.now(tz=_tz.utc)
+        hour = now_utc.hour + now_utc.minute / 60.0
+
+        london = 8.0 <= hour < 16.0
+        new_york = 13.0 <= hour < 21.0
+        overlap = 13.0 <= hour < 16.0
+        asian = 0.0 <= hour < 8.0
+
+        if overlap:
+            return 1.20
+        elif london or new_york:
+            return 1.10
+        elif asian:
+            return 0.80
+        return 0.70
 
     # ------------------------------------------------------------------
     # Action + confidence

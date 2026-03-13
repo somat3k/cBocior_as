@@ -29,6 +29,8 @@ Environment: requires all secrets from SECRETS.md (or .env file).
 from __future__ import annotations
 
 import asyncio
+import http.server
+import json as _json
 import signal
 import sys
 import time
@@ -215,10 +217,20 @@ class CBotRunner:
             dry_run=self.dry_run,
         )
         self._running = True
+        self._start_time = datetime.now(timezone.utc)
+        self._cycle_count = 0
 
         # Register graceful shutdown
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, self._handle_shutdown)
+
+        # Start health-check HTTP server in a daemon thread  (J9)
+        health_thread = threading.Thread(
+            target=self._serve_health,
+            daemon=True,
+            name="health-server",
+        )
+        health_thread.start()
 
         # Start Twisted reactor in a daemon thread.
         # installSignalHandlers=False is required when reactor.run() is called
@@ -324,6 +336,7 @@ class CBotRunner:
             await asyncio.sleep(BOT_LOOP_INTERVAL_SECONDS)
             try:
                 await self._single_cycle()
+                self._cycle_count += 1
             except Exception as exc:  # noqa: BLE001
                 logger.error("Cycle error", error=str(exc), exc_info=True)
 
@@ -417,6 +430,7 @@ class CBotRunner:
         )
 
         # Build input payload for agents
+        tf_div = signal_data.get("timeframe_divergence", False)
         input_payload = (
             PayloadBuilder()
             .source("signal_engine")
@@ -431,9 +445,16 @@ class CBotRunner:
                 market_analysis=market_analysis,
                 phase_info=phase_info,
                 signal_components=signal_data.get("components", {}),
+                timeframe_divergence=tf_div,
             )
             .build()
         )
+        if tf_div:
+            input_payload = input_payload.model_copy(
+                update={"risk_flags": input_payload.risk_flags.model_copy(
+                    update={"timeframe_divergence": True}
+                )}
+            )
         # Attach indicators + model signals
         for snap in indicator_snapshots:
             input_payload = input_payload.model_copy(
@@ -487,13 +508,19 @@ class CBotRunner:
                     )
                     continue
 
+                # Attach per-account risk report to decision metadata (I9)
+                risk_report = ctx.risk_manager.build_risk_report()
+                enriched_decision = decision.model_copy(
+                    update={"metadata": {**decision.metadata, "risk_report": risk_report}}
+                )
+
                 # Size position relative to this account's capital
                 volume = ctx.risk_manager.compute_position_size(
                     stop_loss_pips=TRADING_STOP_LOSS_PIPS,
                     risk_pct=1.0,
                 )
                 ctx.execution.execute(
-                    payload=decision,
+                    payload=enriched_decision,
                     volume=volume,
                     stop_loss_pips=TRADING_STOP_LOSS_PIPS,
                     take_profit_pips=TRADING_TAKE_PROFIT_PIPS,
@@ -506,6 +533,65 @@ class CBotRunner:
                     action=decision.action.value,
                     symbol=self.symbol,
                 )
+
+    # ------------------------------------------------------------------
+    # Health-check HTTP server  (J9)
+    # ------------------------------------------------------------------
+
+    def _serve_health(self, port: int = 8765) -> None:
+        """
+        Serve a minimal HTTP ``/health`` endpoint on *port*.
+
+        Response example::
+
+            {
+              "status": "ok",
+              "uptime_s": 3600,
+              "cycles": 42,
+              "symbol": "EURUSD",
+              "accounts": 2,
+              "running": true
+            }
+
+        The server is intentionally minimal (stdlib only) and runs in a
+        daemon thread so it is automatically stopped when the bot exits.
+        """
+        runner = self  # capture for closure
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802
+                if self.path in ("/health", "/health/"):
+                    uptime = (
+                        datetime.now(timezone.utc) - runner._start_time
+                    ).total_seconds()
+                    body = _json.dumps({
+                        "status": "ok",
+                        "uptime_s": round(uptime, 1),
+                        "cycles": getattr(runner, "_cycle_count", 0),
+                        "symbol": runner.symbol,
+                        "accounts": len(runner._account_contexts),
+                        "running": runner._running,
+                    }).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args: Any) -> None:  # silence access log
+                pass
+
+        try:
+            server = http.server.HTTPServer(("0.0.0.0", port), _Handler)
+            logger.info("Health endpoint started", port=port, path="/health")
+            server.serve_forever()
+        except OSError as exc:
+            logger.warning(
+                "Could not start health server", port=port, error=str(exc)
+            )
 
     # ------------------------------------------------------------------
     # Shutdown

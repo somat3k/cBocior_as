@@ -63,6 +63,19 @@ from src.models.quantum_algo import QuantumParticleSwarm
 from src.models.registry import ModelRegistry
 from src.utils.logger import get_logger
 
+try:
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
+    _RICH_AVAILABLE = True
+except ImportError:
+    _RICH_AVAILABLE = False
+
 logger = get_logger(__name__)
 
 # Per-timeframe training schedule
@@ -129,14 +142,36 @@ class ModelTrainer:
         -------
         dict mapping timeframe → {'nn': NeuralNetwork, 'gbm': model, 'scaler': scaler}
         """
-        for tf in timeframes:
-            if tf not in data:
-                logger.warning("No data for timeframe, skipping", timeframe=tf)
-                continue
+        tfs_to_train = [tf for tf in timeframes if tf in data]
+        missing = [tf for tf in timeframes if tf not in data]
+        for tf in missing:
+            logger.warning("No data for timeframe, skipping", timeframe=tf)
+
+        def _train_one(tf: str) -> None:
             logger.info("Starting training", symbol=self.symbol, timeframe=tf)
             result = self._train_timeframe(data[tf], tf)
             self.trained_models[tf] = result
             self._export(result, tf)
+
+        if _RICH_AVAILABLE and tfs_to_train:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+            ) as progress:
+                task = progress.add_task(
+                    f"[cyan]Training {self.symbol}",
+                    total=len(tfs_to_train),
+                )
+                for tf in tfs_to_train:
+                    progress.update(task, description=f"[cyan]{self.symbol} {tf}")
+                    _train_one(tf)
+                    progress.advance(task)
+        else:
+            for tf in tfs_to_train:
+                _train_one(tf)
 
         return self.trained_models
 

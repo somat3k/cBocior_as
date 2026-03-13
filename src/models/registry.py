@@ -2,6 +2,7 @@
 src/models/registry.py — Model versioning, metadata, and integrity checks.
 
 Implements:
+  K2 — Keep last 3 model versions; auto-archive older ones.
   K3 — Metadata JSON alongside each exported model artefact.
   K4 — Central ``exports/registry.json`` tracking all model versions.
   K8 — SHA-256 file-hash computation and verification for integrity checks.
@@ -12,36 +13,17 @@ Registry schema (``exports/registry.json``)::
       "EURUSD": {
         "M1": {
           "version": 3,
-          "exported_at": "2026-03-13T02:00:00Z",
-          "nn_val_acc": 0.5823,
-          "gbm_val_acc": 0.5914,
-          "bt_win_rate": 59.1,
-          "bt_max_drawdown_pct": 3.2,
-          "bt_total_return_pct": 12.4,
-          "feature_count": 13,
-          "files": {
-            "nn":      {"path": "EURUSD/EURUSD_M1_nn.npz",      "sha256": "abc..."},
-            "gbm":     {"path": "EURUSD/EURUSD_M1_model.joblib", "sha256": "def..."},
-            "scaler":  {"path": "EURUSD/EURUSD_M1_scaler.joblib","sha256": "ghi..."},
-            "features":{"path": "EURUSD/EURUSD_M1_features.joblib","sha256": "jkl..."}
-          }
+          ...
         }
       }
     }
 
-Metadata JSON (``exports/<SYMBOL>/<SYMBOL>_<TF>_meta.json``)::
+Archive layout (``exports/archive/<SYMBOL>/``)::
 
-    {
-      "symbol": "EURUSD",
-      "timeframe": "M1",
-      "version": 3,
-      "exported_at": "2026-03-13T02:00:00Z",
-      "nn_val_acc": 0.5823,
-      "gbm_val_acc": 0.5914,
-      "bt_win_rate": 59.1,
-      ...
-      "files": { ... }
-    }
+    EURUSD_M1_v1_nn.npz
+    EURUSD_M1_v1_model.joblib
+    ...
+    EURUSD_M1_v1_meta.json
 """
 
 from __future__ import annotations
@@ -58,6 +40,8 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 _REGISTRY_FILENAME = "registry.json"
+_KEEP_VERSIONS = 3          # K2: keep this many recent versions per symbol/TF
+_ARCHIVE_DIR = "archive"    # subdirectory under export_dir for old versions
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +100,7 @@ class ModelRegistry:
         self.export_dir = Path(export_dir)
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self._registry_path = self.export_dir / _REGISTRY_FILENAME
+        self._archive_dir = self.export_dir / _ARCHIVE_DIR
 
     # ------------------------------------------------------------------
     # Public API
@@ -151,6 +136,10 @@ class ModelRegistry:
         # Determine version: one higher than the previous entry for this key
         existing = registry.get(symbol, {}).get(timeframe, {})
         version = int(existing.get("version", 0)) + 1
+
+        # K2: archive the previous version before overwriting
+        if existing:
+            self._archive_version(symbol, timeframe, existing)
 
         # Compute hashes and build file index
         file_index: dict[str, dict[str, str]] = {}
@@ -248,6 +237,77 @@ class ModelRegistry:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _archive_version(
+        self, symbol: str, timeframe: str, meta: dict[str, Any]
+    ) -> None:
+        """
+        Move all files from *meta* into ``archive/<SYMBOL>/`` with a version
+        suffix, then prune old archives to keep at most _KEEP_VERSIONS.  (K2)
+        """
+        version = meta.get("version", 0)
+        arch_sym_dir = self._archive_dir / symbol
+        try:
+            arch_sym_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+
+        for _key, info in meta.get("files", {}).items():
+            src = self.export_dir / info["path"]
+            if src.exists():
+                stem = src.stem
+                dst = arch_sym_dir / f"{stem}_v{version}{src.suffix}"
+                try:
+                    src.rename(dst)
+                except OSError as exc:
+                    logger.warning(
+                        "Could not archive model file",
+                        src=str(src),
+                        dst=str(dst),
+                        error=str(exc),
+                    )
+
+        # Archive the metadata JSON too
+        meta_src = self.export_dir / symbol / f"{symbol}_{timeframe}_meta.json"
+        if meta_src.exists():
+            meta_dst = arch_sym_dir / f"{symbol}_{timeframe}_v{version}_meta.json"
+            try:
+                meta_src.rename(meta_dst)
+            except OSError:
+                pass
+
+        self._prune_archive(symbol, timeframe)
+
+    def _prune_archive(self, symbol: str, timeframe: str) -> None:
+        """Remove oldest archived versions so only _KEEP_VERSIONS remain."""
+        arch_sym_dir = self._archive_dir / symbol
+        if not arch_sym_dir.exists():
+            return
+
+        # Collect versioned metadata files for this symbol+TF
+        pattern = f"{symbol}_{timeframe}_v*_meta.json"
+        meta_files = sorted(
+            arch_sym_dir.glob(pattern),
+            key=lambda p: int(
+                p.name.split("_v")[1].split("_")[0]
+                if "_v" in p.name else "0"
+            ),
+        )
+        # Keep only the most recent _KEEP_VERSIONS
+        to_remove = meta_files[: max(0, len(meta_files) - _KEEP_VERSIONS)]
+        for meta_path in to_remove:
+            # Parse version from filename
+            try:
+                v = int(meta_path.name.split("_v")[1].split("_")[0])
+            except (IndexError, ValueError):
+                continue
+            # Remove all artefacts with that version suffix
+            for p in arch_sym_dir.glob(f"*_v{v}*"):
+                try:
+                    p.unlink()
+                    logger.debug("Pruned old model archive", path=str(p))
+                except OSError:
+                    pass
 
     def _load_registry(self) -> dict[str, Any]:
         if not self._registry_path.exists():

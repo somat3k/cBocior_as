@@ -72,9 +72,18 @@ class RiskManager:
         self,
         payload: TradingPayload,
         current_spread_pips: float = 0.0,
+        required_margin: float = 0.0,
     ) -> tuple[bool, str, RiskFlags]:
         """
         Evaluate all risk rules for the proposed trade.
+
+        Parameters
+        ----------
+        payload : TradingPayload
+        current_spread_pips : float
+        required_margin : float
+            Estimated margin required for the trade in account currency.
+            When > 0, a margin sufficiency check is performed  (I6).
 
         Returns
         -------
@@ -135,7 +144,22 @@ class RiskManager:
         if payload.action == TradingAction.HOLD:
             return True, "HOLD — no trade executed", flags
 
-        # 6. Any blocking flag → deny
+        # 6. Margin check  (I6) — only when equity and required_margin are known
+        if required_margin > 0.0 and self.account.equity > 0.0:
+            free_margin = self.account.equity - self.account.margin
+            if free_margin < required_margin:
+                reasons.append(
+                    f"Insufficient margin: free={free_margin:.2f}, "
+                    f"required={required_margin:.2f}"
+                )
+                logger.warning(
+                    "Trade blocked: insufficient margin",
+                    free_margin=round(free_margin, 2),
+                    required_margin=round(required_margin, 2),
+                )
+                return False, "; ".join(reasons), flags
+
+        # 7. Any blocking flag → deny
         blocking = (
             flags.spread_exceeded
             or flags.daily_loss_limit_approaching
@@ -154,6 +178,34 @@ class RiskManager:
             return False, reason_str, flags
 
         return True, "Risk checks passed", flags
+
+    def build_risk_report(self) -> dict:
+        """
+        Build a structured risk report snapshot for inclusion in trade payloads.  (I9)
+
+        Returns a plain dict that can be stored in ``TradingPayload.metadata``
+        under the key ``"risk_report"``.
+        """
+        balance = self.account.balance or self._initial_capital
+        peak = self.account.peak_balance or balance
+        drawdown_pct = 0.0
+        if peak > 0:
+            drawdown_pct = (peak - self.account.equity) / peak * 100
+
+        return {
+            "balance": round(balance, 2),
+            "equity": round(self.account.equity, 2),
+            "margin": round(self.account.margin, 2),
+            "free_margin": round(self.account.equity - self.account.margin, 2),
+            "unrealised_pnl": round(self.account.unrealised_pnl, 2),
+            "daily_pnl": round(self.account.daily_pnl, 2),
+            "peak_balance": round(peak, 2),
+            "drawdown_pct": round(drawdown_pct, 2),
+            "open_positions": len(self.account.open_positions),
+            "daily_loss_limit_usd": RISK_DAILY_LOSS_LIMIT_USD,
+            "max_drawdown_pct": RISK_MAX_DRAWDOWN_PCT,
+            "emergency_halt": drawdown_pct >= RISK_MAX_DRAWDOWN_PCT * 2.0,
+        }
 
     def compute_position_size(
         self,
