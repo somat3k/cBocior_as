@@ -15,8 +15,7 @@ import pytest
 
 from src.data.ctrader_client import OHLCVBar
 from src.data.multi_symbol_fetcher import MultiSymbolFetcher
-from src.utils.cache import _MemoryCache, reset_cache
-
+from src.utils.cache import reset_cache
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -170,6 +169,7 @@ class TestCsvFallback:
         # Pre-write a CSV file
         df = _make_df("XRPUSD", "M1", n=5)
         from datetime import date
+
         from constants import CSV_TEMPLATE
 
         csv_path = tmp_data_dir / CSV_TEMPLATE.format(

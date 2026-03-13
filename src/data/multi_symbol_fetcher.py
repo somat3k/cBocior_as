@@ -18,7 +18,6 @@ Typical usage::
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -27,13 +26,13 @@ from constants import (
     DATA_DIR,
     REDIS_CACHE_TTL_SECONDS,
     SUPPORTED_TIMEFRAMES,
+    TF_1H,
+    TF_1M,
+    TF_5M,
     TRAIN_1H_TRADES,
     TRAIN_1M_TRADES,
     TRAIN_5M_TRADES,
     TRAINING_SYMBOLS,
-    TF_1H,
-    TF_1M,
-    TF_5M,
 )
 from src.data.ctrader_client import CTraderClient, OHLCVBar
 from src.data.hyperliquid_fetcher import HyperLiquidFetcher

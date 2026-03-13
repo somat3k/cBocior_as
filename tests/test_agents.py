@@ -16,7 +16,6 @@ from src.agents.base_agent import AgentError, BaseAgent
 from src.agents.orchestrator import AgentOrchestrator
 from src.utils.payload import TradingAction, TradingPayload
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

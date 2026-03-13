@@ -53,9 +53,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy pandas scipy scikit-learn joblib pytest pytest-asyncio \
+          pip install numpy pandas scipy scikit-learn joblib pytest pytest-asyncio pytest-mock \
                       pydantic pydantic-settings python-dotenv structlog ujson rich \
-                      lightgbm
+                      lightgbm requests redis langsmith openai google-genai groq
 
       - name: Run tests
         env:

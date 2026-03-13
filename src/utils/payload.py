@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import os
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -24,7 +23,6 @@ except ImportError:
 from pydantic import BaseModel, Field, field_validator
 
 from constants import PAYLOAD_ENCODING, PAYLOAD_VERSION
-
 
 # ---------------------------------------------------------------------------
 # Enumerations

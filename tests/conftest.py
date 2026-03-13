@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Set all required environment variables BEFORE importing constants.py
 # This must run before any project module that imports constants is loaded.

@@ -4,10 +4,7 @@ tests/test_payload.py — Unit tests for the TradingPayload system.
 
 from __future__ import annotations
 
-import pytest
-
 from src.utils.payload import (
-    AgentID,
     IndicatorSnapshot,
     ModelSignals,
     PayloadBuilder,

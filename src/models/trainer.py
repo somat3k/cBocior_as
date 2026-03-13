@@ -44,6 +44,9 @@ from constants import (
     NN_LEARNING_RATE,
     SCALER_TEMPLATE,
     SUPPORTED_TIMEFRAMES,
+    TF_1H,
+    TF_1M,
+    TF_5M,
     TRADING_STOP_LOSS_PIPS,
     TRADING_TAKE_PROFIT_PIPS,
     TRAIN_1H_EPOCHS,
@@ -52,9 +55,6 @@ from constants import (
     TRAIN_1M_TRADES,
     TRAIN_5M_EPOCHS,
     TRAIN_5M_TRADES,
-    TF_1H,
-    TF_1M,
-    TF_5M,
 )
 from src.models.backtester import Backtester, BacktestResult
 from src.models.indicators import compute_indicators, get_feature_columns

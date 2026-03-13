@@ -17,12 +17,12 @@ from constants import (
     CSV_TEMPLATE,
     DATA_DIR,
     SUPPORTED_TIMEFRAMES,
-    TRAIN_1H_TRADES,
-    TRAIN_1M_TRADES,
-    TRAIN_5M_TRADES,
     TF_1H,
     TF_1M,
     TF_5M,
+    TRAIN_1H_TRADES,
+    TRAIN_1M_TRADES,
+    TRAIN_5M_TRADES,
 )
 from src.data.ctrader_client import CTraderClient, OHLCVBar
 from src.utils.logger import get_logger

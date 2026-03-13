@@ -31,9 +31,9 @@ from __future__ import annotations
 import asyncio
 import http.server
 import json as _json
+import os
 import signal
 import sys
-import time
 import threading
 from collections import deque
 from datetime import datetime, timezone
@@ -56,37 +56,32 @@ from constants import (
     CTRADER_PORT,
     MODEL_EXPORT_DIR,
     SUPPORTED_TIMEFRAMES,
-    TRADING_SYMBOL,
-    TRADING_VOLUME,
-    TRADING_STOP_LOSS_PIPS,
-    TRADING_TAKE_PROFIT_PIPS,
     TF_1H,
-    TF_1M,
-    TF_5M,
+    TRADING_STOP_LOSS_PIPS,
+    TRADING_SYMBOL,
+    TRADING_TAKE_PROFIT_PIPS,
 )
-
-# ── Source modules ───────────────────────────────────────────────────────────
-from src.utils.logger import configure_logging, get_logger
+from src.agents.orchestrator import AgentOrchestrator
+from src.analysis.market_analyzer import MarketAnalyzer
+from src.analysis.pattern_detector import PatternDetector
+from src.analysis.signal_engine import SignalEngine
 from src.data.ctrader_client import CTraderClient, OHLCVBar
 from src.data.data_fetcher import DataFetcher
 from src.models.indicators import compute_indicators, snapshot_for_payload
-from src.models.trainer import ModelTrainer
 from src.models.quantum_algo import PhaseEstimator
-from src.analysis.pattern_detector import PatternDetector
-from src.analysis.market_analyzer import MarketAnalyzer
-from src.analysis.signal_engine import SignalEngine
+from src.models.trainer import ModelTrainer
 from src.trading.account_config import AccountConfig, get_account_configs
 from src.trading.decision_engine import DecisionEngine
 from src.trading.execution import Execution
 from src.trading.risk_manager import RiskManager
-from src.agents.orchestrator import AgentOrchestrator
+
+# ── Source modules ───────────────────────────────────────────────────────────
+from src.utils.logger import configure_logging, get_logger
 from src.utils.payload import (
     IndicatorSnapshot,
     ModelSignals,
     PayloadBuilder,
-    RiskFlags,
     TradingAction,
-    TradingPayload,
 )
 
 # ── Logging ──────────────────────────────────────────────────────────────────

@@ -6,9 +6,7 @@ All network calls are mocked; no real HTTP requests are made.
 
 from __future__ import annotations
 
-import json
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -16,8 +14,7 @@ import pytest
 
 from src.data.ctrader_client import OHLCVBar
 from src.data.hyperliquid_fetcher import HyperLiquidFetcher
-from src.utils.cache import _MemoryCache, reset_cache
-
+from src.utils.cache import reset_cache
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -273,7 +273,8 @@ class SignalEngine:
           - Asian (00:00–08:00 UTC):             0.80
           - Outside all major sessions:          0.70
         """
-        from datetime import datetime, timezone as _tz
+        from datetime import datetime
+        from datetime import timezone as _tz
         now_utc = datetime.now(tz=_tz.utc)
         hour = now_utc.hour + now_utc.minute / 60.0
 

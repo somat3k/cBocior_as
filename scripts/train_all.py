@@ -56,6 +56,7 @@ if str(_ROOT) not in sys.path:
 
 # ── Load environment (must happen before importing constants) ─────────────────
 from dotenv import load_dotenv
+
 load_dotenv(dotenv_path=_ROOT / ".env", override=False)
 
 # ── Minimal env defaults so constants.py doesn't raise on missing secrets ─────

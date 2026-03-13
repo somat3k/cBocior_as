@@ -10,16 +10,12 @@ Validates that:
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-
-from src.trading.account_config import AccountConfig, get_account_configs
+from src.trading.account_config import get_account_configs
 from src.trading.execution import Execution, Position
 from src.trading.risk_manager import RiskManager
 from src.utils.payload import TradingAction, TradingPayload
-
 
 # ---------------------------------------------------------------------------
 # Helpers

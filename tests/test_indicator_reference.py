@@ -13,7 +13,6 @@ import pytest
 
 from src.models.indicators import compute_indicators
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -119,14 +118,17 @@ class TestBollingerBands:
 
     def test_bb_upper_above_lower(self) -> None:
         df = compute_indicators(_trending_up(60), "M1")
-        upper = _col("M1", "bb_upper"); mid = _col("M1", "bb_middle"); lower = _col("M1", "bb_lower")
+        upper = _col("M1", "bb_upper")
+        mid = _col("M1", "bb_middle")
+        lower = _col("M1", "bb_lower")
         bb = df[[upper, mid, lower]].dropna()
         assert (bb[upper] >= bb[mid]).all()
         assert (bb[mid] >= bb[lower]).all()
 
     def test_bb_width_near_zero_for_flat_series(self) -> None:
         df = compute_indicators(_flat_df(50), "M1")
-        upper = _col("M1", "bb_upper"); lower = _col("M1", "bb_lower")
+        upper = _col("M1", "bb_upper")
+        lower = _col("M1", "bb_lower")
         bb = df[[upper, lower]].dropna()
         assert ((bb[upper] - bb[lower]).abs() < 0.01).all()
 
@@ -151,13 +153,15 @@ class TestEMA:
 
     def test_ema9_above_ema200_in_uptrend(self) -> None:
         df = compute_indicators(_trending_up(250), "M1")
-        ema9 = _col("M1", "ema_9"); ema200 = _col("M1", "ema_200")
+        ema9 = _col("M1", "ema_9")
+        ema200 = _col("M1", "ema_200")
         last = df[[ema9, ema200]].dropna().iloc[-1]
         assert last[ema9] > last[ema200]
 
     def test_ema9_below_ema200_in_downtrend(self) -> None:
         df = compute_indicators(_trending_down(250), "M1")
-        ema9 = _col("M1", "ema_9"); ema200 = _col("M1", "ema_200")
+        ema9 = _col("M1", "ema_9")
+        ema200 = _col("M1", "ema_200")
         last = df[[ema9, ema200]].dropna().iloc[-1]
         assert last[ema9] < last[ema200]
 

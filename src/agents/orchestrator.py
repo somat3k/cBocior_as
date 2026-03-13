@@ -15,7 +15,6 @@ Minority or timeout → HOLD.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from src.agents.base_agent import AgentError, BaseAgent
 from src.agents.gemini_agent import GeminiAgent
@@ -24,7 +23,6 @@ from src.agents.openai_agent import OpenAIAgent
 from src.agents.openrouter_agent import OpenRouterAgent
 from src.utils.logger import get_logger
 from src.utils.payload import (
-    AgentID,
     TradingAction,
     TradingPayload,
     merge_payloads,

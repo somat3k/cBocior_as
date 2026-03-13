@@ -11,7 +11,6 @@ import pytest
 
 from src.models.backtester import Backtester, BacktestResult, _max_drawdown
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
