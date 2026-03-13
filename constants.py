@@ -112,11 +112,16 @@ MODEL_EXPORT_DIR: Path = Path(_opt("MODEL_EXPORT_DIR", "./exports"))
 DATA_DIR: Path = Path(_opt("DATA_DIR", "./data"))
 
 # Training schedule (per timeframe)
-TRAIN_1M_TRADES: int = int(_opt("TRAIN_1M_TRADES", "2000"))
+# Candle counts set to the maximum practical range for each timeframe:
+#   M1  — 10 000 bars ≈ 7 days of 1-minute data
+#   M5  —  5 000 bars ≈ 17 days of 5-minute data
+#   H1  —  2 000 bars ≈ 83 days (~3 months) of hourly data
+# These defaults request the maximum useful history from HyperLiquid/cTrader.
+TRAIN_1M_TRADES: int = int(_opt("TRAIN_1M_TRADES", "10000"))
 TRAIN_1M_EPOCHS: int = int(_opt("TRAIN_1M_EPOCHS", "200"))
-TRAIN_5M_TRADES: int = int(_opt("TRAIN_5M_TRADES", "1000"))
+TRAIN_5M_TRADES: int = int(_opt("TRAIN_5M_TRADES", "5000"))
 TRAIN_5M_EPOCHS: int = int(_opt("TRAIN_5M_EPOCHS", "200"))
-TRAIN_1H_TRADES: int = int(_opt("TRAIN_1H_TRADES", "250"))
+TRAIN_1H_TRADES: int = int(_opt("TRAIN_1H_TRADES", "2000"))
 TRAIN_1H_EPOCHS: int = int(_opt("TRAIN_1H_EPOCHS", "200"))
 
 # ─── Timeframe constants ──────────────────────────────────────────────────

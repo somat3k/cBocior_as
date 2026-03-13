@@ -102,6 +102,25 @@ class MultiSymbolTrainer:
         )
 
         all_data = fetcher.fetch_all()
+        return self.run_with_data(all_data)
+
+    def run_with_data(
+        self,
+        all_data: dict[str, dict[str, pd.DataFrame]],
+    ) -> dict[str, dict[str, dict[str, Any]]]:
+        """
+        Train models using pre-fetched data.
+
+        Parameters
+        ----------
+        all_data : dict[symbol, dict[timeframe, DataFrame]]
+            Pre-fetched OHLCV data, e.g. from
+            :meth:`~src.data.multi_symbol_fetcher.MultiSymbolFetcher.fetch_all`.
+
+        Returns
+        -------
+        dict[symbol, dict[timeframe, training_result]]
+        """
         results: dict[str, dict[str, dict[str, Any]]] = {}
 
         for symbol in self.symbols:
@@ -150,10 +169,25 @@ class MultiSymbolTrainer:
         # Flatten result: timeframe → metrics dict (drop heavy model objects)
         summary: dict[str, dict[str, Any]] = {}
         for tf, result in trained.items():
+            bt = result.get("backtest")
+            backtest_metrics: dict[str, Any] = {}
+            if bt is not None:
+                backtest_metrics = {
+                    "bt_total_trades": bt.total_trades,
+                    "bt_win_rate": bt.win_rate,
+                    "bt_max_drawdown_pct": bt.max_drawdown_pct,
+                    "bt_total_return_pct": bt.total_return_pct,
+                    "bt_profit_factor": bt.profit_factor,
+                    "bt_cancelled_rate": bt.cancelled_rate,
+                    "bt_avg_win_pips": bt.avg_win_pips,
+                    "bt_avg_loss_pips": bt.avg_loss_pips,
+                }
+
             summary[tf] = {
                 "nn_val_acc": result.get("nn_val_acc"),
                 "gbm_val_acc": result.get("gbm_val_acc"),
                 "feature_cols": result.get("feature_cols", []),
+                **backtest_metrics,
             }
             logger.info(
                 "Symbol training complete",
@@ -161,5 +195,10 @@ class MultiSymbolTrainer:
                 timeframe=tf,
                 nn_val_acc=result.get("nn_val_acc"),
                 gbm_val_acc=result.get("gbm_val_acc"),
+                bt_win_rate=backtest_metrics.get("bt_win_rate"),
+                bt_max_drawdown_pct=backtest_metrics.get("bt_max_drawdown_pct"),
+                bt_total_return_pct=backtest_metrics.get("bt_total_return_pct"),
+                bt_profit_factor=backtest_metrics.get("bt_profit_factor"),
+                bt_cancelled_rate=backtest_metrics.get("bt_cancelled_rate"),
             )
         return summary

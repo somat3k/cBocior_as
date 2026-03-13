@@ -72,6 +72,10 @@ _TF_MINUTES: dict[str, int] = {
     "D1": 1440,
 }
 
+# HyperLiquid API returns at most this many candles per request.
+# Requests for larger counts are automatically paginated.
+_HL_MAX_CANDLES_PER_REQUEST: int = 5000
+
 
 class HyperLiquidFetcher:
     """
@@ -211,10 +215,59 @@ class HyperLiquidFetcher:
     def _fetch_from_api(
         self, interval: str, count: int, timeframe: str
     ) -> list[OHLCVBar]:
-        """Call the HyperLiquid candle API and return OHLCVBar list."""
-        now_ms = int(time.time() * 1000)
+        """
+        Fetch bars from HyperLiquid, paginating when ``count`` exceeds the
+        per-request cap (:data:`_HL_MAX_CANDLES_PER_REQUEST`).
+        """
+        if count <= _HL_MAX_CANDLES_PER_REQUEST:
+            return self._fetch_batch(
+                interval, count, timeframe,
+                end_ms=int(time.time() * 1000),
+            )
+
+        # Paginate: request _HL_MAX_CANDLES_PER_REQUEST bars at a time,
+        # moving the time window backward until we have enough bars.
+        all_bars: list[OHLCVBar] = []
+        end_ms = int(time.time() * 1000)
+        remaining = count
+
+        while remaining > 0:
+            batch_size = min(remaining, _HL_MAX_CANDLES_PER_REQUEST)
+            batch = self._fetch_batch(interval, batch_size, timeframe, end_ms)
+            if not batch:
+                break
+            all_bars = batch + all_bars  # prepend (oldest-first order)
+            remaining -= len(batch)
+            if len(batch) < batch_size:
+                break  # API exhausted available history
+            # Shift end_ms to one millisecond before the earliest bar fetched
+            end_ms = int(batch[0].timestamp.timestamp() * 1000) - 1
+
+        # Deduplicate by timestamp (datetime objects are hashable), sort,
+        # and return only the most-recent `count` bars.
+        unique: dict[object, OHLCVBar] = {b.timestamp: b for b in all_bars}
+        sorted_bars = sorted(unique.values(), key=lambda b: b.timestamp)
+        bars = sorted_bars[-count:]
+
+        logger.debug(
+            "HyperLiquid bars fetched (paginated)",
+            symbol=self.symbol,
+            timeframe=timeframe,
+            requested=count,
+            returned=len(bars),
+        )
+        return bars
+
+    def _fetch_batch(
+        self,
+        interval: str,
+        count: int,
+        timeframe: str,
+        end_ms: int,
+    ) -> list[OHLCVBar]:
+        """Fetch a single batch (≤ ``_HL_MAX_CANDLES_PER_REQUEST`` bars)."""
         bar_minutes = _TF_MINUTES.get(timeframe, 1)
-        start_ms = now_ms - count * bar_minutes * 60 * 1000
+        start_ms = end_ms - count * bar_minutes * 60 * 1000
 
         payload: dict[str, Any] = {
             "type": "candleSnapshot",
@@ -222,7 +275,7 @@ class HyperLiquidFetcher:
                 "coin": self.hl_coin,
                 "interval": interval,
                 "startTime": start_ms,
-                "endTime": now_ms,
+                "endTime": end_ms,
             },
         }
 
@@ -263,12 +316,6 @@ class HyperLiquidFetcher:
                 continue
 
         bars.sort(key=lambda b: b.timestamp)
-        logger.debug(
-            "HyperLiquid bars fetched",
-            symbol=self.symbol,
-            timeframe=timeframe,
-            count=len(bars),
-        )
         return bars
 
     def _candle_to_bar(self, candle: dict[str, Any], timeframe: str) -> OHLCVBar:

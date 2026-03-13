@@ -44,6 +44,8 @@ from constants import (
     NN_LEARNING_RATE,
     SCALER_TEMPLATE,
     SUPPORTED_TIMEFRAMES,
+    TRADING_STOP_LOSS_PIPS,
+    TRADING_TAKE_PROFIT_PIPS,
     TRAIN_1H_EPOCHS,
     TRAIN_1H_TRADES,
     TRAIN_1M_EPOCHS,
@@ -57,6 +59,7 @@ from constants import (
 from src.models.indicators import compute_indicators, get_feature_columns
 from src.models.neural_network import NeuralNetwork
 from src.models.quantum_algo import QuantumParticleSwarm
+from src.models.backtester import Backtester, BacktestResult
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -237,6 +240,26 @@ class ModelTrainer:
             features=len(available),
         )
 
+        # ── Backtest on validation portion ────────────────────────────
+        # Align close prices with the valid, scaled validation features so
+        # the Backtester can simulate realistic trade entries and exits.
+        close_all = df["close"].values[:-1]          # drop last row (no future)
+        close_all = close_all[valid_mask]             # same mask as X_raw
+        val_close = close_all[len(X_train):]         # validation portion only
+
+        backtester = Backtester(
+            initial_capital=10_000.0,
+            stop_loss_pips=TRADING_STOP_LOSS_PIPS,
+            take_profit_pips=TRADING_TAKE_PROFIT_PIPS,
+        )
+        backtest_result: BacktestResult = backtester.run(
+            X_scaled=X_val_sc,
+            close_prices=val_close,
+            nn=nn,
+            gbm=gbm,
+            timeframe=timeframe,
+        )
+
         return {
             "nn": nn,
             "gbm": gbm,
@@ -244,6 +267,7 @@ class ModelTrainer:
             "feature_cols": available,
             "nn_val_acc": float(nn_val_acc),
             "gbm_val_acc": float(gbm_val_acc),
+            "backtest": backtest_result,
         }
 
     # ------------------------------------------------------------------
