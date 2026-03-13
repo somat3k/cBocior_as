@@ -177,7 +177,8 @@ class TestATR:
         assert (atr >= 0.0).all()
 
     def test_atr_flat_series_near_zero(self) -> None:
-        df = compute_indicators(_flat_df(30, price=1.0), "M1")
+        # Need at least max(BB_PERIOD=20, MACD_SLOW=26, RSI_PERIOD=14) + 5 = 31 rows
+        df = compute_indicators(_flat_df(35, price=1.0), "M1")
         atr = df[_col("M1", "atr")].dropna()
         if len(atr):
             assert atr.iloc[-1] < 0.01
