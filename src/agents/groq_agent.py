@@ -56,9 +56,6 @@ class GroqAgent(BaseAgent):
 
         system_prompt, user_prompt = build_groq_prompts(compact)
 
-        if not self._models:
-            raise RuntimeError("No Groq models configured")
-
         last_error: GroqError | None = None
         for model in self._models:
             try:
@@ -85,4 +82,6 @@ class GroqAgent(BaseAgent):
                 update={"confidence": min(result.confidence, 0.6)}
             )
 
-        raise last_error or RuntimeError("All Groq model attempts failed")
+        raise last_error or RuntimeError(
+            f"All Groq model attempts failed: {', '.join(self._models)}"
+        )
