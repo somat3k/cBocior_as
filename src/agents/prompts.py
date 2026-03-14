@@ -1,9 +1,9 @@
 """
 src/agents/prompts.py — Prompt templates + LangSmith prompt hub integration.
 
-Provides default prompt templates for each agent role and optional overrides
-via LangSmith prompt hub. Set LANGSMITH_PROMPT_* environment variables to the
-prompt IDs if you want to pull templates from LangSmith.
+Provides the default Groq prompt template and optional overrides via the
+LangSmith prompt hub. Set LANGSMITH_PROMPT_GROQ_* environment variables to
+the prompt IDs if you want to pull templates from LangSmith.
 """
 
 from __future__ import annotations
@@ -19,56 +19,15 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 _PROMPT_ENV_KEYS: dict[str, str] = {
-    "openai_system": "LANGSMITH_PROMPT_OPENAI_SYSTEM",
-    "openai_user": "LANGSMITH_PROMPT_OPENAI_USER",
-    "gemini": "LANGSMITH_PROMPT_GEMINI",
     "groq_system": "LANGSMITH_PROMPT_GROQ_SYSTEM",
     "groq_user": "LANGSMITH_PROMPT_GROQ_USER",
-    "openrouter_system": "LANGSMITH_PROMPT_OPENROUTER_SYSTEM",
-    "openrouter_user": "LANGSMITH_PROMPT_OPENROUTER_USER",
 }
 LANGSMITH_PROMPT_ENV_VARS: tuple[str, ...] = tuple(_PROMPT_ENV_KEYS.values())
 _MAX_TEMPLATE_SNIPPET_LENGTH = 160
 
 # ---------------------------------------------------------------------------
-# Default templates (fallbacks)
+# Default template (fallback)
 # ---------------------------------------------------------------------------
-
-_OPENAI_SYSTEM = (
-    "You are an expert algorithmic FX trading analyst with deep "
-    "knowledge of technical analysis and market microstructure. "
-    "Your role is to provide the final trade justification.\n\n"
-    "Given a market data JSON payload, output ONLY a valid JSON "
-    "object with these exact fields:\n"
-    '{"action": "BUY|SELL|HOLD", "confidence": 0.0-1.0, '
-    '"reasoning": "concise justification max 200 words"}\n\n'
-    "Rules:\n"
-    "- Cite at least one indicator and one model signal.\n"
-    "- Be conservative: default to HOLD when uncertain.\n"
-    "- Confidence < 0.55 must result in HOLD."
-)
-
-_OPENAI_USER = (
-    "Analyse the following market data and produce a trading signal:\n\n"
-    "$market_data"
-)
-
-_GEMINI_PROMPT = (
-    "You are an expert algorithmic FX trading analyst specialising in "
-    "multi-timeframe technical analysis.\n\n"
-    "Analyse the indicators from 1 m, 5 m, and 1 H timeframes in the "
-    "provided market data payload. Identify pattern confluences and "
-    "divergences across timeframes.\n\n"
-    "Output ONLY a valid JSON object:\n"
-    '{"action": "BUY|SELL|HOLD", "confidence": 0.0-1.0, '
-    '"reasoning": "timeframe analysis max 200 words"}\n\n'
-    "Rules:\n"
-    "- Flag timeframe_divergence in reasoning if signals differ across "
-    "timeframes.\n"
-    "- Default to HOLD on divergence.\n"
-    "- Confidence range: 0.0 (no signal) to 1.0 (strong confluence).\n\n"
-    "Market data:\n$market_data"
-)
 
 _GROQ_SYSTEM = (
     "FX trading signal generator. Respond with ONLY a JSON object: "
@@ -78,26 +37,6 @@ _GROQ_SYSTEM = (
 
 _GROQ_USER = "Market snapshot: $snapshot"
 
-_OPENROUTER_SYSTEM = (
-    "You are the final consensus arbiter for a multi-agent algorithmic "
-    "FX trading system. You receive a payload containing market data, "
-    "indicator snapshots, model signals, and preliminary agent analyses "
-    "from OpenAI, Gemini, and Groq.\n\n"
-    "Your task is to evaluate all available information and produce a "
-    "single authoritative trading decision.\n\n"
-    "Output ONLY a valid JSON object:\n"
-    '{"action": "BUY|SELL|HOLD", "confidence": 0.0-1.0, '
-    '"reasoning": "consensus reasoning max 150 words"}\n\n'
-    "Rules:\n"
-    "- If agent signals conflict, default to HOLD.\n"
-    "- Risk flags must reduce confidence proportionally.\n"
-    "- Be the most conservative of all agents."
-)
-
-_OPENROUTER_USER = (
-    "Produce the final consensus trading signal for this payload:\n\n"
-    "$market_data"
-)
 
 
 # ---------------------------------------------------------------------------
@@ -263,27 +202,11 @@ def _inject_context(template: str, context: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Public prompt builders
+# Public prompt builder
 # ---------------------------------------------------------------------------
-
-def build_openai_prompts(market_data: str) -> tuple[str, str]:
-    system = _resolve_template("openai_system", _OPENAI_SYSTEM)
-    user = _resolve_template("openai_user", _OPENAI_USER)
-    return system, _inject_context(user, {"market_data": market_data})
-
-
-def build_gemini_prompt(market_data: str) -> str:
-    template = _resolve_template("gemini", _GEMINI_PROMPT)
-    return _inject_context(template, {"market_data": market_data})
 
 
 def build_groq_prompts(snapshot: str) -> tuple[str, str]:
     system = _resolve_template("groq_system", _GROQ_SYSTEM)
     user = _resolve_template("groq_user", _GROQ_USER)
     return system, _inject_context(user, {"snapshot": snapshot})
-
-
-def build_openrouter_prompts(market_data: str) -> tuple[str, str]:
-    system = _resolve_template("openrouter_system", _OPENROUTER_SYSTEM)
-    user = _resolve_template("openrouter_user", _OPENROUTER_USER)
-    return system, _inject_context(user, {"market_data": market_data})

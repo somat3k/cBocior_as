@@ -1,7 +1,7 @@
 """
-src/agents/groq_agent.py — Groq LLaMA-3 70B agent (high-speed path).
+src/agents/groq_agent.py — Groq OSS 120B agent (single decision path).
 
-Role: Rapid preliminary signal scoring.
+Role: Primary signal generation.
 Target response time: < 10 seconds.
 """
 
@@ -22,7 +22,7 @@ GROQ_TIMEOUT: int = 10
 
 
 class GroqAgent(BaseAgent):
-    """LLaMA-3 70B powered speed-optimised preliminary signal agent."""
+    """OSS 120B powered primary signal agent."""
 
     agent_id: str = "groq"
 

@@ -11,38 +11,23 @@ in production.
 
 | Agent ID | Provider | Primary Role | Secondary Role |
 |---|---|---|---|
-| `openai` | OpenAI (GPT-4o) | Decision reasoning, trade justification | Prompt refinement |
-| `gemini` | Google Gemini 1.5 Pro | Pattern synthesis, multi-modal analysis | Indicator interpretation |
-| `groq` | Groq (LLaMA 3 70B) | High-speed real-time inference | Low-latency signal scoring |
-| `openrouter` | OpenRouter (Claude 3.5) | Cross-model consensus, fallback reasoning | Risk assessment |
+| `groq` | Groq (OSS 120B) | Single-agent signal generation | Low-latency signal scoring |
 
 ---
 
 ## 2. Orchestration Rules
 
-### 2.1 Normal Operation (All agents available)
-1. **Groq** is called first (lowest latency) to produce a rapid preliminary
-   signal score (`BUY` / `SELL` / `HOLD` + confidence 0–1).
-2. **Gemini** analyses the latest multi-timeframe indicator payload and
-   synthesises a pattern narrative.
-3. **OpenAI** evaluates both outputs, adds trade justification, and proposes
-   the final action with reasoning.
-4. **OpenRouter** acts as consensus arbiter: it receives all three previous
-   outputs and emits the final decision payload.
-5. The orchestrator accepts the final payload only when ≥ 3 of 4 agents
-   agree (majority rule).  Disagreements are logged and trigger a HOLD.
+### 2.1 Normal Operation (Groq-only)
+1. **Groq OSS 120B** produces the trading signal (`BUY` / `SELL` / `HOLD`
+   + confidence 0–1).
+2. The orchestrator returns the Groq payload directly.
 
-### 2.2 Degraded Operation (1–2 agents unavailable)
-* If only **Groq** is available → accept its signal at reduced confidence
-  (confidence capped at 0.6).
-* If only **OpenAI** is available → accept its signal (confidence capped at
-  0.7).
-* If no agents respond within `BOT_ANALYSIS_COOLDOWN_SECONDS` → HOLD and
-  log a critical alert.
+### 2.2 Degraded Operation (Groq unavailable)
+* If Groq fails or times out → return a HOLD payload and log a critical alert.
 
 ### 2.3 Agent Call Budget
-* Maximum `BOT_MAX_CONCURRENT_AGENTS` (default 4) simultaneous API calls.
-* Each agent has a per-call timeout of **30 seconds**.
+* Maximum `BOT_MAX_CONCURRENT_AGENTS` (default 1) simultaneous API calls.
+* Groq has a per-call timeout of **10 seconds**.
 * Rate-limit back-off: exponential, base 2 s, max 60 s, max 5 retries.
 
 ---
@@ -84,25 +69,10 @@ defined in `src/utils/payload.py`.  Key fields:
   - Conflicting signals across timeframes
   - Model confidence < 0.55
 
-### OpenAI Agent (`openai_agent.py`)
-* Responsible for **final narrative justification** of every trade.
-* Must cite at least one technical indicator and one model signal.
-* Output language: English, concise (< 200 words in `reasoning`).
-
-### Gemini Agent (`gemini_agent.py`)
-* Specialises in **multi-timeframe pattern synthesis**.
-* Receives full OHLCV + indicator payloads for 1 m, 5 m, and 1 H.
-* Must flag "timeframe divergence" if signals differ across timeframes.
-
 ### Groq Agent (`groq_agent.py`)
-* Optimised for **speed**; uses the fastest available model.
-* Provides a preliminary score used as a tiebreaker.
-* Must respond within **10 seconds** or be skipped for this cycle.
-
-### OpenRouter Agent (`openrouter_agent.py`)
-* Acts as **consensus arbiter**.
-* Receives outputs from all other agents in its prompt context.
-* Emits the final signed-off payload with `source: "openrouter"`.
+* Single-agent signal generator using the OSS 120B model.
+* Must respond within **10 seconds** or the cycle returns HOLD.
+* Output language: English, concise (< 200 words in `reasoning`).
 
 ---
 

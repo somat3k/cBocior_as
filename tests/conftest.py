@@ -23,11 +23,8 @@ _TEST_ENV = {
     "CTRADER_ACCOUNT_ID": "12345678",
     "CTRADER_ACCOUNT_ID_ACC2": "87654321",
     "CTRADER_ENVIRONMENT": "DEMO",
-    # AI providers (mock keys)
-    "OPENAI_API_KEY": "sk-test-openai",
-    "GEMINI_API_KEY": "AIza-test-gemini",
+    # AI provider (mock key)
     "GROQ_API_KEY": "gsk_test_groq",
-    "OPENROUTER_API_KEY": "sk-or-test",
     # LangSmith
     "LANGSMITH_API_KEY": "ls__test",
     "LANGSMITH_PROJECT": "cBocior_as_test",
