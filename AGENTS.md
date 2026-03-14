@@ -11,14 +11,14 @@ in production.
 
 | Agent ID | Provider | Primary Role | Secondary Role |
 |---|---|---|---|
-| `groq` | Groq (OSS 120B) | Single-agent signal generation | Low-latency signal scoring |
+| `groq` | Groq (OSS 120B via `GROQ_MODEL`) | Single-agent signal generation | Low-latency signal scoring |
 
 ---
 
 ## 2. Orchestration Rules
 
 ### 2.1 Normal Operation (Groq-only)
-1. **Groq OSS 120B** produces the trading signal (`BUY` / `SELL` / `HOLD`
+1. **Groq OSS 120B** (via `GROQ_MODEL`) produces the trading signal (`BUY` / `SELL` / `HOLD`
    + confidence 0–1).
 2. The orchestrator returns the Groq payload directly.
 
@@ -70,7 +70,7 @@ defined in `src/utils/payload.py`.  Key fields:
   - Model confidence < 0.55
 
 ### Groq Agent (`groq_agent.py`)
-* Single-agent signal generator using the OSS 120B model.
+* Single-agent signal generator using the OSS 120B model (via `GROQ_MODEL`).
 * Must respond within **10 seconds** or the cycle returns HOLD.
 * Output language: English, concise (< 200 words in `reasoning`).
 

@@ -1,7 +1,7 @@
 """
 src/agents/groq_agent.py — Groq OSS 120B agent (single decision path).
 
-Role: Primary signal generation.
+Role: Primary signal generation (configured via GROQ_MODEL).
 Target response time: < 10 seconds.
 """
 
@@ -22,7 +22,7 @@ GROQ_TIMEOUT: int = 10
 
 
 class GroqAgent(BaseAgent):
-    """OSS 120B powered primary signal agent."""
+    """OSS 120B powered primary signal agent (via GROQ_MODEL)."""
 
     agent_id: str = "groq"
 

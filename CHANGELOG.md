@@ -63,8 +63,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   progress bar when the library is available.
 
 ### Changed
-- Groq OSS 120B is now the sole agent provider; other agent integrations were
-  removed along with their dependencies and configuration requirements.
+- Groq OSS 120B (via `GROQ_MODEL`) is now the sole agent provider; other agent
+  integrations were removed along with their dependencies and configuration
+  requirements.
 - `RiskFlags` in `payload.py` gains `emergency_halt: bool` field; `merge_payloads`
   and `any_flag` updated accordingly.
 

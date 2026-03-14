@@ -5,9 +5,9 @@
 An autonomous AI-driven trading cBot for the cTrader platform.
 
 Combines Neural Networks, Quantum-inspired optimisation, and a Groq OSS 120B
-agent orchestration layer to discover market patterns, evaluate indicators
-across multiple timeframes, and execute trades with comprehensive risk
-management.
+agent orchestration layer (configured via `GROQ_MODEL`) to discover market
+patterns, evaluate indicators across multiple timeframes, and execute trades
+with comprehensive risk management.
 
 ---
 
@@ -32,7 +32,7 @@ cTrader Open API (TCP/Protobuf)
   └── Cross-TF divergence + PhaseEstimator (FFT quantum-inspired)
          │
          ▼  (JSON payload)
-  GroqAgent (OSS 120B — single-agent decision engine)
+  GroqAgent (OSS 120B via GROQ_MODEL — single-agent decision engine)
          │
          ▼  (Groq payload)
   DecisionEngine ──► RiskManager ──► Execution
@@ -116,7 +116,7 @@ and merged into a unified feature vector for the models:
 
 ## Groq Decision Protocol
 
-1. **Groq OSS 120B** → single-agent signal generation
+1. **Groq OSS 120B** (via `GROQ_MODEL`) → single-agent signal generation
 2. **DecisionEngine** → confidence gate (>= 0.65)
 3. **RiskManager** → spread, drawdown, daily loss checks
 
@@ -141,7 +141,7 @@ cBocior_as/
 │   │   └── trainer.py          # Training pipeline
 │   ├── agents/
 │   │   ├── base_agent.py       # Abstract agent
-│   │   ├── groq_agent.py       # Groq OSS 120B
+│   │   ├── groq_agent.py       # Groq OSS 120B (via GROQ_MODEL)
 │   │   └── orchestrator.py     # Groq-only orchestrator
 │   ├── analysis/
 │   │   ├── pattern_detector.py # Candlestick + price-action patterns

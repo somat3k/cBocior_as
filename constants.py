@@ -64,7 +64,7 @@ CTRADER_PORT: int = 5035
 
 # ─── Groq ─────────────────────────────────────────────────────────────────
 GROQ_API_KEY: str = _req("GROQ_API_KEY")
-GROQ_MODEL: str = _opt("GROQ_MODEL", "llama-3.1-120b")
+GROQ_MODEL: str = _opt("GROQ_MODEL", "oss-120b")
 
 # ─── LangSmith ────────────────────────────────────────────────────────────
 LANGSMITH_API_KEY: str = _req("LANGSMITH_API_KEY")
