@@ -63,8 +63,8 @@ class GroqAgent(BaseAgent):
 
         total_models = len(self._models)
         for index, model in enumerate(self._models):
+            logger.debug("Calling Groq", model=model)
             try:
-                logger.debug("Calling Groq", model=model)
                 response = await self._client.chat.completions.create(
                     model=model,
                     messages=[
@@ -87,7 +87,3 @@ class GroqAgent(BaseAgent):
             return result.model_copy(
                 update={"confidence": min(result.confidence, 0.6)}
             )
-
-        raise RuntimeError(
-            f"All Groq model attempts failed (tried: {', '.join(self._models)})"
-        )
