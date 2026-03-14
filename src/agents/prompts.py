@@ -211,6 +211,7 @@ def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
             "LangSmith prompt pull raised error",
             key=key,
             prompt_id=prompt_id,
+            error_type=type(exc).__name__,
             error=str(exc),
         )
         return None
@@ -243,7 +244,8 @@ def _inject_context(template: str, context: dict[str, Any]) -> str:
     except ValueError as exc:
         snippet = template[:160].replace("\n", "\\n")
         raise ValueError(
-            "Invalid prompt template placeholder; escape literal '$' as '$$'. "
+            "Invalid prompt template placeholder; ensure placeholders use "
+            "$name syntax and escape literal '$' as '$$'. "
             f"Template: '{snippet}'"
         ) from exc
 
