@@ -13,6 +13,7 @@ from google.genai import types
 
 from constants import GEMINI_API_KEY, GEMINI_MODEL
 from src.agents.base_agent import BaseAgent
+from src.agents.prompts import build_gemini_prompt
 from src.utils.logger import get_logger
 from src.utils.payload import TradingPayload
 
@@ -31,22 +32,7 @@ class GeminiAgent(BaseAgent):
     async def _call(self, payload: TradingPayload) -> TradingPayload:
         market_data = self._format_payload_for_prompt(payload)
 
-        prompt = (
-            "You are an expert algorithmic FX trading analyst specialising in "
-            "multi-timeframe technical analysis.\n\n"
-            "Analyse the indicators from 1M, 5M, and 1H timeframes in the "
-            "provided market data payload. Identify pattern confluences and "
-            "divergences across timeframes.\n\n"
-            "Output ONLY a valid JSON object:\n"
-            '{"action": "BUY|SELL|HOLD", "confidence": 0.0-1.0, '
-            '"reasoning": "timeframe analysis max 200 words"}\n\n'
-            "Rules:\n"
-            "- Flag timeframe_divergence in reasoning if signals differ across "
-            "timeframes.\n"
-            "- Default to HOLD on divergence.\n"
-            "- Confidence range: 0.0 (no signal) to 1.0 (strong confluence).\n\n"
-            f"Market data:\n{market_data}"
-        )
+        prompt = build_gemini_prompt(market_data)
 
         config = types.GenerateContentConfig(
             temperature=0.1,

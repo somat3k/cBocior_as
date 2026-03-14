@@ -11,6 +11,7 @@ from groq import AsyncGroq
 
 from constants import GROQ_API_KEY, GROQ_MODEL
 from src.agents.base_agent import BaseAgent
+from src.agents.prompts import build_groq_prompts
 from src.utils.logger import get_logger
 from src.utils.payload import TradingPayload
 
@@ -47,18 +48,14 @@ class GroqAgent(BaseAgent):
 
         compact = json.dumps(quick_data)
 
-        system_prompt = (
-            "FX trading signal generator. Respond with ONLY a JSON object: "
-            '{"action":"BUY|SELL|HOLD","confidence":0.0-1.0,'
-            '"reasoning":"<30 words"}. Be decisive and fast.'
-        )
+        system_prompt, user_prompt = build_groq_prompts(compact)
 
         logger.debug("Calling Groq", model=GROQ_MODEL)
         response = await self._client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Market snapshot: {compact}"},
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.0,
             max_tokens=128,
