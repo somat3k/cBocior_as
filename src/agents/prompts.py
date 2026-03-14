@@ -27,7 +27,7 @@ _PROMPT_ENV_KEYS: dict[str, str] = {
     "openrouter_system": "LANGSMITH_PROMPT_OPENROUTER_SYSTEM",
     "openrouter_user": "LANGSMITH_PROMPT_OPENROUTER_USER",
 }
-PROMPT_ENV_VARS: tuple[str, ...] = tuple(_PROMPT_ENV_KEYS.values())
+LANGSMITH_PROMPT_ENV_VARS: tuple[str, ...] = tuple(_PROMPT_ENV_KEYS.values())
 _MAX_TEMPLATE_SNIPPET_LENGTH = 160
 
 # ---------------------------------------------------------------------------
@@ -200,7 +200,7 @@ def _prompt_id(key: str) -> str | None:
 
 
 @lru_cache(maxsize=None)
-def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
+def _pull_langsmith_prompt(key: str, prompt_id: str | None) -> str | None:
     """Cache prompt lookups per (key, prompt_id) pair."""
     if not prompt_id:
         return None
@@ -232,7 +232,7 @@ def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
 def _resolve_template(key: str, fallback: str) -> str:
     prompt_id = _prompt_id(key)
     if prompt_id:
-        template = _resolve_template_cached(key, prompt_id)
+        template = _pull_langsmith_prompt(key, prompt_id)
         if template:
             return template
         logger.warning(

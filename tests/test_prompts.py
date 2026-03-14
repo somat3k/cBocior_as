@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from src.agents.prompts import (
-    PROMPT_ENV_VARS,
+    LANGSMITH_PROMPT_ENV_VARS,
     build_gemini_prompt,
     build_groq_prompts,
     build_openai_prompts,
@@ -17,7 +17,7 @@ from src.agents.prompts import (
 
 @pytest.fixture(autouse=True)
 def _clear_langsmith_prompt_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    for key in PROMPT_ENV_VARS:
+    for key in LANGSMITH_PROMPT_ENV_VARS:
         monkeypatch.delenv(key, raising=False)
 
 
