@@ -243,12 +243,15 @@ class TestGroqAgent:
         ):
             mock_client = MagicMock()
             MockGroq.return_value = mock_client
+            first_error = GroqError("bad model")
+            last_error = GroqError("down")
             mock_client.chat.completions.create = AsyncMock(
-                side_effect=[GroqError("bad model"), GroqError("down")]
+                side_effect=[first_error, last_error]
             )
             agent = GroqAgent()
-            with pytest.raises(GroqError):
+            with pytest.raises(GroqError) as excinfo:
                 asyncio.run(agent._call(_make_payload()))
+            assert excinfo.value is last_error
 
 
 # ---------------------------------------------------------------------------
