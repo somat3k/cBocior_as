@@ -197,10 +197,12 @@ def _prompt_id(key: str) -> str | None:
     return value or None
 
 
-@lru_cache(maxsize=32)
+@lru_cache(maxsize=len(_PROMPT_ENV_KEYS))
 def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
+    """Cache prompt lookups per (key, prompt_id) pair."""
     if not prompt_id:
         return None
+    logger.debug("Pulling LangSmith prompt", key=key, prompt_id=prompt_id)
     return _prompt_hub().pull(prompt_id)
 
 
