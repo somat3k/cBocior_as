@@ -55,6 +55,12 @@ class GroqAgent(BaseAgent):
 
         system_prompt, user_prompt = build_groq_prompts(compact)
 
+        if not self._models:
+            raise RuntimeError(
+                "No Groq models configured. Set GROQ_MODEL to a "
+                "comma-separated list of model IDs."
+            )
+
         last_error: GroqError | None = None
         for model in self._models:
             try:
@@ -82,11 +88,6 @@ class GroqAgent(BaseAgent):
             )
 
         if last_error is None:
-            if not self._models:
-                raise RuntimeError(
-                    "No Groq models configured. Set GROQ_MODEL to a "
-                    "comma-separated list of model IDs."
-                )
             raise RuntimeError(
                 f"All Groq model attempts failed (tried: {', '.join(self._models)})"
             )
