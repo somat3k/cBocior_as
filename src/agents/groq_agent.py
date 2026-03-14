@@ -7,7 +7,7 @@ Target response time: < 10 seconds.
 
 from __future__ import annotations
 
-from groq import AsyncGroq
+from groq import AsyncGroq, GroqError
 
 from constants import GROQ_API_KEY, GROQ_MODEL
 from src.agents.base_agent import BaseAgent
@@ -56,7 +56,10 @@ class GroqAgent(BaseAgent):
 
         system_prompt, user_prompt = build_groq_prompts(compact)
 
-        last_error: Exception | None = None
+        if not self._models:
+            raise RuntimeError("No Groq models configured")
+
+        last_error: GroqError | None = None
         for model in self._models:
             try:
                 logger.debug("Calling Groq", model=model)
@@ -69,7 +72,7 @@ class GroqAgent(BaseAgent):
                     temperature=0.0,
                     max_tokens=128,
                 )
-            except Exception as exc:  # noqa: BLE001
+            except GroqError as exc:
                 last_error = exc
                 logger.warning("Groq model call failed", model=model, error=str(exc))
                 continue
@@ -82,4 +85,4 @@ class GroqAgent(BaseAgent):
                 update={"confidence": min(result.confidence, 0.6)}
             )
 
-        raise last_error or RuntimeError("No Groq models configured")
+        raise last_error or RuntimeError("All Groq model attempts failed")

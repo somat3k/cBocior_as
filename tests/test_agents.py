@@ -199,6 +199,7 @@ class TestGroqAgent:
         assert result.source == "groq"
 
     def test_falls_back_to_next_model(self) -> None:
+        from groq import GroqError
         from src.agents.groq_agent import GroqAgent
 
         mock_message = MagicMock()
@@ -213,7 +214,7 @@ class TestGroqAgent:
                 mock_client = MagicMock()
                 MockGroq.return_value = mock_client
                 mock_client.chat.completions.create = AsyncMock(
-                    side_effect=[RuntimeError("bad model"), mock_response]
+                    side_effect=[GroqError("bad model"), mock_response]
                 )
                 agent = GroqAgent()
                 result = asyncio.get_event_loop().run_until_complete(
@@ -229,6 +230,23 @@ class TestGroqAgent:
             mock_client.chat.completions.create.call_args_list[1].kwargs["model"]
             == "backup-model"
         )
+
+    def test_raises_when_all_models_fail(self) -> None:
+        from groq import GroqError
+        from src.agents.groq_agent import GroqAgent
+
+        with patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"):
+            with patch("src.agents.groq_agent.AsyncGroq") as MockGroq:
+                mock_client = MagicMock()
+                MockGroq.return_value = mock_client
+                mock_client.chat.completions.create = AsyncMock(
+                    side_effect=[GroqError("bad model"), GroqError("down")]
+                )
+                agent = GroqAgent()
+                with pytest.raises(GroqError):
+                    asyncio.get_event_loop().run_until_complete(
+                        agent._call(_make_payload())
+                    )
 
 
 # ---------------------------------------------------------------------------
