@@ -107,16 +107,19 @@ class PromptHub:
 
     def __init__(self) -> None:
         self._client: Any | None = None
+        client_cls = None
         try:
             from langsmith import Client
+            client_cls = Client
         except ImportError:
             logger.debug("LangSmith client unavailable, using default prompts")
-            return
-        try:
-            self._client = Client()
-        except (ValueError, RuntimeError, ConnectionError) as exc:
-            logger.warning("LangSmith client init failed", error=str(exc))
-            self._client = None
+
+        if client_cls is not None:
+            try:
+                self._client = client_cls()
+            except (ValueError, RuntimeError, ConnectionError) as exc:
+                logger.warning("LangSmith client init failed", error=str(exc))
+                self._client = None
 
     def pull(self, prompt_id: str) -> str | None:
         if not prompt_id or self._client is None:
@@ -155,18 +158,29 @@ def _coerce_prompt(prompt_obj: Any) -> str | None:
             signature = inspect.signature(formatter)
         except (TypeError, ValueError):
             signature = None
-        if signature and signature.parameters:
-            logger.debug(
-                "Prompt formatter requires arguments; skipping",
-                params=list(signature.parameters),
+        if signature:
+            requires_args = any(
+                param.default is inspect._empty
+                and param.kind
+                in (
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.KEYWORD_ONLY,
+                )
+                for param in signature.parameters.values()
             )
-        else:
-            try:
-                formatted = formatter()
-                if isinstance(formatted, str):
-                    return formatted
-            except (TypeError, ValueError):
-                logger.debug("Prompt formatter failed without args")
+            if requires_args:
+                logger.debug(
+                    "Prompt formatter requires arguments; skipping",
+                    params=list(signature.parameters),
+                )
+                return str(prompt_obj)
+        try:
+            formatted = formatter()
+            if isinstance(formatted, str):
+                return formatted
+        except (TypeError, ValueError):
+            logger.debug("Prompt formatter failed without args")
     return str(prompt_obj)
 
 
