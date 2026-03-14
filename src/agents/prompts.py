@@ -54,7 +54,7 @@ _OPENAI_USER = (
 _GEMINI_PROMPT = (
     "You are an expert algorithmic FX trading analyst specialising in "
     "multi-timeframe technical analysis.\n\n"
-    "Analyse the indicators from 1M, 5M, and 1H timeframes in the "
+    "Analyse the indicators from 1 m, 5 m, and 1 H timeframes in the "
     "provided market data payload. Identify pattern confluences and "
     "divergences across timeframes.\n\n"
     "Output ONLY a valid JSON object:\n"
@@ -107,11 +107,12 @@ class PromptHub:
 
     def __init__(self) -> None:
         self._client: Any | None = None
-        client_cls = None
+        client_cls: type | None
         try:
             from langsmith import Client
         except ImportError:
             logger.debug("LangSmith client unavailable, using default prompts")
+            client_cls = None
         else:
             client_cls = Client
 
