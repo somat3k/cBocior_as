@@ -33,8 +33,7 @@ class GroqAgent(BaseAgent):
 
     @staticmethod
     def _parse_model_list(raw: str) -> list[str]:
-        models = [model.strip() for model in raw.split(",") if model.strip()]
-        return models or ["oss-120b"]
+        return [model.strip() for model in raw.split(",") if model.strip()]
 
     async def _call(self, payload: TradingPayload) -> TradingPayload:
         # Compact prompt to minimise tokens (< 500 tokens total)
@@ -55,6 +54,9 @@ class GroqAgent(BaseAgent):
         compact = json.dumps(quick_data)
 
         system_prompt, user_prompt = build_groq_prompts(compact)
+
+        if not self._models:
+            raise RuntimeError("No Groq models configured")
 
         last_error: GroqError | None = None
         for model in self._models:

@@ -65,7 +65,7 @@ class TestBaseAgentRetry:
         agent = _SometimesFailAgent(fail_times=1)
         payload = _make_payload()
         with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
-            result = asyncio.get_event_loop().run_until_complete(agent.analyse(payload))
+            result = asyncio.run(agent.analyse(payload))
         assert result.source == "sometimes_fail"
         assert agent._call_count == 2  # 1 fail + 1 success
 
@@ -77,9 +77,7 @@ class TestBaseAgentRetry:
         with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
             for _ in range(MAX_RETRIES):
                 with pytest.raises(AgentError):
-                    asyncio.get_event_loop().run_until_complete(
-                        agent.analyse(_make_payload())
-                    )
+                    asyncio.run(agent.analyse(_make_payload()))
         assert agent.degraded
 
     def test_degraded_reset_on_success(self) -> None:
@@ -90,16 +88,12 @@ class TestBaseAgentRetry:
         with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
             for _ in range(MAX_RETRIES):
                 with pytest.raises(AgentError):
-                    asyncio.get_event_loop().run_until_complete(
-                        agent.analyse(_make_payload())
-                    )
+                    asyncio.run(agent.analyse(_make_payload()))
         assert agent.degraded
 
         # Now allow success
         agent._fail_times = 0
-        result = asyncio.get_event_loop().run_until_complete(
-            agent.analyse(_make_payload())
-        )
+        result = asyncio.run(agent.analyse(_make_payload()))
         assert not agent.degraded
         assert result is not None
 
@@ -117,9 +111,7 @@ class TestBaseAgentRetry:
         agent = _SlowAgent(timeout=0.01)
         # Do NOT mock asyncio.sleep here — we need the real one for wait_for to fire
         with pytest.raises(AgentError):
-            asyncio.get_event_loop().run_until_complete(
-                agent.analyse(_make_payload())
-            )
+            asyncio.run(agent.analyse(_make_payload()))
 
 
 # ---------------------------------------------------------------------------
@@ -192,9 +184,7 @@ class TestGroqAgent:
             MockGroq.return_value = mock_client
             mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
             agent = GroqAgent()
-            result = asyncio.get_event_loop().run_until_complete(
-                agent._call(_make_payload())
-            )
+            result = asyncio.run(agent._call(_make_payload()))
         assert result.action == TradingAction.SELL
         assert result.source == "groq"
 
@@ -217,9 +207,7 @@ class TestGroqAgent:
                     side_effect=[GroqError("bad model"), mock_response]
                 )
                 agent = GroqAgent()
-                result = asyncio.get_event_loop().run_until_complete(
-                    agent._call(_make_payload())
-                )
+                result = asyncio.run(agent._call(_make_payload()))
 
         assert result.action == TradingAction.BUY
         assert (
@@ -244,9 +232,7 @@ class TestGroqAgent:
                 )
                 agent = GroqAgent()
                 with pytest.raises(GroqError):
-                    asyncio.get_event_loop().run_until_complete(
-                        agent._call(_make_payload())
-                    )
+                    asyncio.run(agent._call(_make_payload()))
 
 
 # ---------------------------------------------------------------------------
@@ -267,17 +253,13 @@ class TestAgentOrchestratorGroqOnly:
         orch._groq.analyse = AsyncMock(
             return_value=_make_payload(action=TradingAction.BUY, source="groq")
         )
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
+        result = asyncio.run(orch.run(_make_payload()))
         assert result.action == TradingAction.BUY
         assert result.source == "groq"
 
     def test_groq_failure_returns_hold(self) -> None:
         orch = self._make_orchestrator_with_mock()
         orch._groq.analyse = AsyncMock(side_effect=AgentError("down"))
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
+        result = asyncio.run(orch.run(_make_payload()))
         assert result.action == TradingAction.HOLD
         assert result.source == "groq"
