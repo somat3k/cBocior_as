@@ -87,5 +87,9 @@ class GroqAgent(BaseAgent):
                 update={"confidence": min(result.confidence, 0.6)}
             )
 
-        assert last_error is not None
+        if last_error is None:
+            raise RuntimeError(
+                "All Groq model attempts failed (tried: "
+                f"{', '.join(self._models)}), but no error was captured"
+            )
         raise last_error
