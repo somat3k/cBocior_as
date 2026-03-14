@@ -12,13 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import random
-import time
 from abc import ABC, abstractmethod
-from typing import Any
 
-from langsmith import traceable
-
-from constants import BOT_MAX_CONCURRENT_AGENTS
 from src.utils.logger import get_logger
 from src.utils.payload import TradingPayload
 

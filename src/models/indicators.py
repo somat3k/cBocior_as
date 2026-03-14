@@ -15,12 +15,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-try:
-    import ta
-    _TA_AVAILABLE = True
-except ImportError:
-    _TA_AVAILABLE = False
-
 from constants import (
     ATR_PERIOD,
     BB_PERIOD,

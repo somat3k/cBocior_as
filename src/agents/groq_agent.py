@@ -45,7 +45,7 @@ class GroqAgent(BaseAgent):
         except ImportError:
             import json  # type: ignore[no-redef]
 
-        compact = json.dumps(quick_data, indent=None)
+        compact = json.dumps(quick_data)
 
         system_prompt = (
             "FX trading signal generator. Respond with ONLY a JSON object: "

@@ -11,8 +11,6 @@ Protobuf message references:
 
 from __future__ import annotations
 
-import asyncio
-import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -144,7 +142,7 @@ class CTraderClient:
             handler installation raises ``ValueError`` in that case.
         """
         try:
-            from ctrader_open_api import Client, EndPoints, TcpProtocol
+            from ctrader_open_api import Client, TcpProtocol
         except ImportError as exc:
             raise ImportError(
                 "ctrader-open-api is not installed. "

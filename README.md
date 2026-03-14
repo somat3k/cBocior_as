@@ -1,5 +1,7 @@
 # cBocior_as
 
+[![CI](https://github.com/somat3k/cBocior_as/actions/workflows/ci.yml/badge.svg)](https://github.com/somat3k/cBocior_as/actions/workflows/ci.yml)
+
 An autonomous AI-driven trading cBot for the cTrader platform.
 
 Combines Neural Networks, Quantum-inspired optimisation, and a multi-agent

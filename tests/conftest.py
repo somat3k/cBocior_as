@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Set all required environment variables BEFORE importing constants.py
 # This must run before any project module that imports constants is loaded.
@@ -23,6 +21,7 @@ _TEST_ENV = {
     "CTRADER_ACCESS_TOKEN": "test_access_token",
     "CTRADER_REFRESH_TOKEN": "test_refresh_token",
     "CTRADER_ACCOUNT_ID": "12345678",
+    "CTRADER_ACCOUNT_ID_ACC2": "87654321",
     "CTRADER_ENVIRONMENT": "DEMO",
     # AI providers (mock keys)
     "OPENAI_API_KEY": "sk-test-openai",
@@ -33,6 +32,13 @@ _TEST_ENV = {
     "LANGSMITH_API_KEY": "ls__test",
     "LANGSMITH_PROJECT": "cBocior_as_test",
     "LANGCHAIN_TRACING_V2": "false",
+    # Redis — disabled in tests; in-memory fallback is used instead
+    "REDIS_ENABLED": "false",
+    "REDIS_URL": "redis://localhost:6379/0",
+    "REDIS_CACHE_TTL_SECONDS": "3600",
+    # Account capitals
+    "INITIAL_CAPITAL_ACC1": "10000",
+    "INITIAL_CAPITAL_ACC2": "50",
     # Overrides
     "LOG_LEVEL": "WARNING",
 }

@@ -75,7 +75,7 @@ class TestSignalEngine:
 
 class TestDecisionEngine:
     def test_below_confidence_returns_hold(self) -> None:
-        from src.trading.decision_engine import DecisionEngine, MIN_CONFIDENCE
+        from src.trading.decision_engine import DecisionEngine
         from src.utils.payload import TradingPayload
 
         engine = DecisionEngine()

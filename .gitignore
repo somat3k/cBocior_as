@@ -52,14 +52,23 @@ coverage.xml
 logs/
 *.log
 
-# Model artifacts (large binary files — export only what's needed)
+# Model artifacts
+# Exclude large binary files stored directly in exports/ but allow files
+# in per-symbol subdirectories (exports/<SYMBOL>/) so trained models can
+# be committed to the repository for use by the cBot without re-training.
 exports/*.pkl
 exports/*.joblib
 exports/*.npy
 exports/*.npz
 exports/*.json.gz
-# Keep the directory itself
+# Keep the directory and allow per-symbol model subdirectories
 !exports/.gitkeep
+!exports/*/*.joblib
+!exports/*/*.npz
+!exports/*/*.pkl
+# Always track metadata and the central registry
+!exports/registry.json
+!exports/*/*.json
 
 # CSV data (can be large)
 data/*.csv

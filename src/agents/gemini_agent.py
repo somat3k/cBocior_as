@@ -1,5 +1,5 @@
 """
-src/agents/gemini_agent.py — Google Gemini 1.5 Pro agent.
+src/agents/gemini_agent.py — Google Gemini agent.
 
 Role: Multi-timeframe pattern synthesis and divergence detection.
 """
@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import asyncio
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from constants import GEMINI_API_KEY, GEMINI_MODEL
 from src.agents.base_agent import BaseAgent
@@ -19,21 +20,13 @@ logger = get_logger(__name__)
 
 
 class GeminiAgent(BaseAgent):
-    """Gemini 1.5 Pro powered multi-timeframe analysis agent."""
+    """Gemini powered multi-timeframe analysis agent."""
 
     agent_id: str = "gemini"
 
     def __init__(self) -> None:
         super().__init__()
-        genai.configure(api_key=GEMINI_API_KEY)
-        self._model = genai.GenerativeModel(
-            model_name=GEMINI_MODEL,
-            generation_config=genai.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=512,
-                response_mime_type="application/json",
-            ),
-        )
+        self._client = genai.Client(api_key=GEMINI_API_KEY)
 
     async def _call(self, payload: TradingPayload) -> TradingPayload:
         market_data = self._format_payload_for_prompt(payload)
@@ -55,12 +48,22 @@ class GeminiAgent(BaseAgent):
             f"Market data:\n{market_data}"
         )
 
+        config = types.GenerateContentConfig(
+            temperature=0.1,
+            max_output_tokens=512,
+            response_mime_type="application/json",
+        )
+
         logger.debug("Calling Gemini", model=GEMINI_MODEL)
-        # google-generativeai is synchronous; run in executor
+        # google-genai is synchronous; run in executor to avoid blocking the event loop
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
             None,
-            lambda: self._model.generate_content(prompt),
+            lambda: self._client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=config,
+            ),
         )
 
         raw = response.text or "{}"

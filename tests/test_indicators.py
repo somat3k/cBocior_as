@@ -6,14 +6,12 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from src.models.indicators import (
     _atr,
     _bollinger,
     _macd,
     _rsi,
-    _stochastic,
     compute_indicators,
     get_feature_columns,
     snapshot_for_payload,

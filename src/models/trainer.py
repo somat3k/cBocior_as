@@ -44,20 +44,37 @@ from constants import (
     NN_LEARNING_RATE,
     SCALER_TEMPLATE,
     SUPPORTED_TIMEFRAMES,
+    TF_1H,
+    TF_1M,
+    TF_5M,
+    TRADING_STOP_LOSS_PIPS,
+    TRADING_TAKE_PROFIT_PIPS,
     TRAIN_1H_EPOCHS,
     TRAIN_1H_TRADES,
     TRAIN_1M_EPOCHS,
     TRAIN_1M_TRADES,
     TRAIN_5M_EPOCHS,
     TRAIN_5M_TRADES,
-    TF_1H,
-    TF_1M,
-    TF_5M,
 )
+from src.models.backtester import Backtester, BacktestResult
 from src.models.indicators import compute_indicators, get_feature_columns
 from src.models.neural_network import NeuralNetwork
 from src.models.quantum_algo import QuantumParticleSwarm
+from src.models.registry import ModelRegistry
 from src.utils.logger import get_logger
+
+try:
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
+    _RICH_AVAILABLE = True
+except ImportError:
+    _RICH_AVAILABLE = False
 
 logger = get_logger(__name__)
 
@@ -99,6 +116,11 @@ class ModelTrainer:
         self.use_qpso = use_qpso
         self.trained_models: dict[str, dict[str, Any]] = {}
 
+    @property
+    def _registry_dir(self) -> Path:
+        """Root directory for the model registry (i.e. ``self.export_dir``)."""
+        return self.export_dir
+
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
@@ -120,14 +142,36 @@ class ModelTrainer:
         -------
         dict mapping timeframe → {'nn': NeuralNetwork, 'gbm': model, 'scaler': scaler}
         """
-        for tf in timeframes:
-            if tf not in data:
-                logger.warning("No data for timeframe, skipping", timeframe=tf)
-                continue
+        tfs_to_train = [tf for tf in timeframes if tf in data]
+        missing = [tf for tf in timeframes if tf not in data]
+        for tf in missing:
+            logger.warning("No data for timeframe, skipping", timeframe=tf)
+
+        def _train_one(tf: str) -> None:
             logger.info("Starting training", symbol=self.symbol, timeframe=tf)
             result = self._train_timeframe(data[tf], tf)
             self.trained_models[tf] = result
             self._export(result, tf)
+
+        if _RICH_AVAILABLE and tfs_to_train:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TimeElapsedColumn(),
+            ) as progress:
+                task = progress.add_task(
+                    f"[cyan]Training {self.symbol}",
+                    total=len(tfs_to_train),
+                )
+                for tf in tfs_to_train:
+                    progress.update(task, description=f"[cyan]{self.symbol} {tf}")
+                    _train_one(tf)
+                    progress.advance(task)
+        else:
+            for tf in tfs_to_train:
+                _train_one(tf)
 
         return self.trained_models
 
@@ -237,6 +281,26 @@ class ModelTrainer:
             features=len(available),
         )
 
+        # ── Backtest on validation portion ────────────────────────────
+        # Align close prices with the valid, scaled validation features so
+        # the Backtester can simulate realistic trade entries and exits.
+        close_all = df["close"].values[:-1]          # drop last row (no future)
+        close_all = close_all[valid_mask]             # same mask as X_raw
+        val_close = close_all[len(X_train):]         # validation portion only
+
+        backtester = Backtester(
+            initial_capital=10_000.0,
+            stop_loss_pips=TRADING_STOP_LOSS_PIPS,
+            take_profit_pips=TRADING_TAKE_PROFIT_PIPS,
+        )
+        backtest_result: BacktestResult = backtester.run(
+            X_scaled=X_val_sc,
+            close_prices=val_close,
+            nn=nn,
+            gbm=gbm,
+            timeframe=timeframe,
+        )
+
         return {
             "nn": nn,
             "gbm": gbm,
@@ -244,6 +308,7 @@ class ModelTrainer:
             "feature_cols": available,
             "nn_val_acc": float(nn_val_acc),
             "gbm_val_acc": float(gbm_val_acc),
+            "backtest": backtest_result,
         }
 
     # ------------------------------------------------------------------
@@ -309,6 +374,7 @@ class ModelTrainer:
         # Save NN
         nn_path = self.export_dir / f"{self.symbol}_{timeframe}_nn"
         result["nn"].save(nn_path)
+        nn_path_full = Path(str(nn_path) + ".npz")
 
         # Save GBM
         gbm_path = self.export_dir / MODEL_TEMPLATE.format(
@@ -326,6 +392,40 @@ class ModelTrainer:
         feat_path = self.export_dir / f"{self.symbol}_{timeframe}_features.joblib"
         joblib.dump(result["feature_cols"], feat_path)
 
+        # Record metadata + hashes in the central registry  (K3 + K4 + K8)
+        bt = result.get("backtest")
+        metrics: dict[str, Any] = {
+            "nn_val_acc": result.get("nn_val_acc"),
+            "gbm_val_acc": result.get("gbm_val_acc"),
+            "feature_count": len(result.get("feature_cols", [])),
+        }
+        if bt is not None:
+            metrics.update({
+                "bt_win_rate": bt.win_rate,
+                "bt_max_drawdown_pct": bt.max_drawdown_pct,
+                "bt_total_return_pct": bt.total_return_pct,
+                "bt_profit_factor": bt.profit_factor,
+                "bt_cancelled_rate": bt.cancelled_rate,
+            })
+        registry = ModelRegistry(self._registry_dir)
+        nn_file = nn_path_full if nn_path_full.exists() else None
+        if nn_file is None:
+            logger.warning(
+                "NN .npz file not found for registry; skipping nn hash",
+                expected_path=str(nn_path_full),
+            )
+        registry.record(
+            symbol=self.symbol,
+            timeframe=timeframe,
+            files={
+                "nn": nn_file or nn_path_full,
+                "gbm": gbm_path,
+                "scaler": scaler_path,
+                "features": feat_path,
+            },
+            metrics=metrics,
+        )
+
         logger.info(
             "Model artefacts exported",
             timeframe=timeframe,
@@ -341,7 +441,14 @@ class ModelTrainer:
     def load_models(
         self, timeframes: tuple[str, ...] = SUPPORTED_TIMEFRAMES
     ) -> dict[str, dict[str, Any]]:
-        """Load all exported models from MODEL_EXPORT_DIR."""
+        """Load all exported models from MODEL_EXPORT_DIR.
+
+        Performs SHA-256 integrity verification for each timeframe before
+        loading (K8).  A mismatch is logged as an error but does not abort
+        the load — the caller receives the best-available models so the bot
+        can continue operating.
+        """
+        registry = ModelRegistry(self._registry_dir)
         loaded: dict[str, dict[str, Any]] = {}
         for tf in timeframes:
             nn_path = self.export_dir / f"{self.symbol}_{tf}_nn.npz"
@@ -357,6 +464,15 @@ class ModelTrainer:
                     "Model artefacts not found, skipping", timeframe=tf
                 )
                 continue
+
+            # Integrity check (K8) — log warning on failure but still load
+            if not registry.verify(self.symbol, tf):
+                logger.warning(
+                    "Integrity check failed; proceeding with caution",
+                    symbol=self.symbol,
+                    timeframe=tf,
+                )
+
             # Load feature columns from file if available, fall back to computed defaults
             if feat_path.exists():
                 feature_cols = joblib.load(feat_path)

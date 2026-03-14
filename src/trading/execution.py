@@ -36,6 +36,9 @@ class Position:
     closed_at: datetime | None = None
     close_price: float | None = None
     pnl: float | None = None
+    # Broker-assigned position ID returned on fill confirmation.
+    # Required for trailing-stop amendments via ProtoOAAmendPositionSLTPReq.
+    broker_position_id: int | None = None
 
 
 class Execution:
@@ -44,11 +47,34 @@ class Execution:
 
     The ``client`` parameter should be a connected ``CTraderClient`` instance.
     When ``dry_run=True`` no actual orders are placed (useful for testing).
+
+    Parameters
+    ----------
+    client : Any, optional
+        Connected ``CTraderClient``.
+    dry_run : bool
+        When ``True`` orders are logged but not sent to the broker.
+    account_id : int, optional
+        cTrader account ID to trade on.  Defaults to ``client.account_id``
+        when not supplied.  Pass explicitly to target a secondary account
+        while reusing the same cTrader connection.
     """
 
-    def __init__(self, client: Any = None, dry_run: bool = False) -> None:
+    def __init__(
+        self,
+        client: Any = None,
+        dry_run: bool = False,
+        account_id: int | None = None,
+    ) -> None:
         self._client = client
         self._dry_run = dry_run
+        # Resolve the account ID: explicit > client's own > 0 fallback
+        if account_id is not None:
+            self._account_id = account_id
+        elif client is not None:
+            self._account_id = getattr(client, "account_id", 0)
+        else:
+            self._account_id = 0
         self._open_positions: dict[str, Position] = {}
 
     # ------------------------------------------------------------------
@@ -62,7 +88,10 @@ class Execution:
         stop_loss_pips: float = TRADING_STOP_LOSS_PIPS,
         take_profit_pips: float = TRADING_TAKE_PROFIT_PIPS,
         current_price: float = 0.0,
-    ) -> Position | None:
+        atr: float = 0.0,
+        atr_sl_mult: float = 1.5,
+        atr_tp_mult: float = 2.5,
+    ) -> "Position | None":
         """
         Execute the trade decision in the payload.
 
@@ -71,16 +100,20 @@ class Execution:
         payload : TradingPayload
             Decision from DecisionEngine.
         volume : int
-            Volume in cTrader centilots (lots × 100).  Default from
-            ``TRADING_VOLUME`` constant.  E.g. ``1`` = 0.01 lot (micro-lot).
+            Volume in cTrader centilots (lots × 100).
         stop_loss_pips : float
-            Stop-loss distance in pips.
+            Fixed stop-loss distance in pips.  Overridden by ATR when *atr* > 0.
         take_profit_pips : float
-            Take-profit distance in pips.
+            Fixed take-profit distance in pips.  Overridden by ATR when *atr* > 0.
         current_price : float
-            Live bid/ask mid-price used to compute absolute SL/TP levels.
-            When ``0.0`` the order is sent without pre-computed SL/TP and
-            protection levels must be attached after the fill price is known.
+            Live bid/ask mid-price for SL/TP calculation.
+        atr : float
+            Current Average True Range value in price units.  When > 0 the
+            SL/TP distances are computed as ATR multiples (H8).
+        atr_sl_mult : float
+            SL = entry ± atr * atr_sl_mult (default 1.5).
+        atr_tp_mult : float
+            TP = entry ± atr * atr_tp_mult (default 2.5).
 
         Returns the new Position or None (on HOLD).
         """
@@ -91,17 +124,28 @@ class Execution:
         symbol = payload.symbol
         action = payload.action
 
-        # Compute SL/TP absolute prices when a live price is available.
-        # If current_price is unknown (0.0) the protection levels are omitted
-        # and must be set via a separate modify-position request after fill.
         pip = 0.0001  # for 4/5-decimal FX pairs
         if current_price > 0.0:
-            if action == TradingAction.BUY:
-                sl = current_price - stop_loss_pips * pip
-                tp = current_price + take_profit_pips * pip
+            # H8: ATR-based SL/TP overrides fixed pips when ATR is available
+            if atr > 0.0:
+                sl_dist = atr * atr_sl_mult
+                tp_dist = atr * atr_tp_mult
+                logger.debug(
+                    "Using ATR-based SL/TP",
+                    atr=round(atr, 5),
+                    sl_dist=round(sl_dist, 5),
+                    tp_dist=round(tp_dist, 5),
+                )
             else:
-                sl = current_price + stop_loss_pips * pip
-                tp = current_price - take_profit_pips * pip
+                sl_dist = stop_loss_pips * pip
+                tp_dist = take_profit_pips * pip
+
+            if action == TradingAction.BUY:
+                sl = current_price - sl_dist
+                tp = current_price + tp_dist
+            else:
+                sl = current_price + sl_dist
+                tp = current_price - tp_dist
         else:
             sl = 0.0
             tp = 0.0
@@ -137,6 +181,8 @@ class Execution:
                 log_kwargs["tp"] = tp
             if not sl and not tp:
                 log_kwargs["protection"] = "pending_post_fill"
+            if atr > 0.0:
+                log_kwargs["atr"] = round(atr, 5)
             logger.info("DRY RUN — order not placed", **log_kwargs)
         else:
             self._send_market_order(symbol, action, volume, sl, tp, order_id)
@@ -174,6 +220,66 @@ class Execution:
     def open_positions(self) -> dict[str, Position]:
         return dict(self._open_positions)
 
+    def update_trailing_stops(
+        self,
+        current_price: float,
+        trail_pips: float = TRADING_STOP_LOSS_PIPS,
+    ) -> list[str]:
+        """
+        Adjust stop-loss on all open positions using a trailing stop.  (H9)
+
+        The trailing stop follows the price at a fixed *trail_pips* distance:
+        - For BUY positions the SL is raised when *current_price* moves above
+          the highest seen close so far by more than *trail_pips*.
+        - For SELL positions the SL is lowered when *current_price* moves below
+          the lowest seen close so far by more than *trail_pips*.
+
+        Parameters
+        ----------
+        current_price : float
+            Latest mid-price.
+        trail_pips : float
+            Trailing distance in pips.
+
+        Returns
+        -------
+        list[str]
+            Order IDs of positions whose SL was updated.
+        """
+        pip = 0.0001
+        trail_dist = trail_pips * pip
+        updated: list[str] = []
+
+        for order_id, pos in self._open_positions.items():
+            if pos.action == TradingAction.BUY:
+                new_sl = current_price - trail_dist
+                if new_sl > pos.stop_loss:
+                    logger.debug(
+                        "Trailing stop raised (BUY)",
+                        order_id=order_id,
+                        old_sl=round(pos.stop_loss, 5),
+                        new_sl=round(new_sl, 5),
+                        price=round(current_price, 5),
+                    )
+                    pos.stop_loss = new_sl
+                    updated.append(order_id)
+                    self._send_modify_sl(order_id, new_sl)
+            else:
+                new_sl = current_price + trail_dist
+                if new_sl < pos.stop_loss or pos.stop_loss == 0.0:
+                    logger.debug(
+                        "Trailing stop lowered (SELL)",
+                        order_id=order_id,
+                        old_sl=round(pos.stop_loss, 5),
+                        new_sl=round(new_sl, 5),
+                        price=round(current_price, 5),
+                    )
+                    pos.stop_loss = new_sl
+                    updated.append(order_id)
+                    self._send_modify_sl(order_id, new_sl)
+
+        return updated
+
     # ------------------------------------------------------------------
     # Private
     # ------------------------------------------------------------------
@@ -200,7 +306,7 @@ class Execution:
             )
 
             req = ProtoOANewOrderReq()
-            req.ctidTraderAccountId = self._client.account_id
+            req.ctidTraderAccountId = self._account_id
             req.symbolId = self._client._symbol_map.get(symbol, 0)
             req.orderType = ProtoOAOrderType.MARKET
             req.tradeSide = (
@@ -222,6 +328,7 @@ class Execution:
                 action=action.value,
                 volume=volume,
                 order_id=order_id,
+                account_id=self._account_id,
             )
         except Exception as exc:
             logger.error(
@@ -230,3 +337,48 @@ class Execution:
                 order_id=order_id,
             )
             raise
+
+    def _send_modify_sl(self, order_id: str, new_sl: float) -> None:
+        """
+        Send a position-amend request to update the stop-loss price.  (H9)
+
+        In dry-run mode, when no client is attached, or when the broker
+        ``position_id`` has not yet been populated (i.e. the fill confirmation
+        hasn't arrived), the call is skipped.  The in-memory
+        ``Position.stop_loss`` has already been updated by the caller so the
+        next fill-check will use the correct level.
+
+        The ``broker_position_id`` field on :class:`Position` is populated by
+        the fill-confirmation callback (``on_execution_event``) in the runner.
+        Until that callback fires, trailing-stop broker amendments are deferred.
+        """
+        if self._dry_run or self._client is None:
+            return
+        pos = self._positions.get(order_id)
+        if pos is None or pos.broker_position_id is None:
+            logger.debug(
+                "Trailing stop amendment deferred — broker_position_id not yet known",
+                order_id=order_id,
+            )
+            return
+        try:
+            from ctrader_open_api.messages.OpenApiMessages_pb2 import (
+                ProtoOAAmendPositionSLTPReq,
+            )
+            req = ProtoOAAmendPositionSLTPReq()
+            req.ctidTraderAccountId = self._account_id
+            req.positionId = pos.broker_position_id
+            req.stopLoss = new_sl
+            self._client._client.send(req)
+            logger.debug(
+                "Trailing stop amended",
+                order_id=order_id,
+                broker_position_id=pos.broker_position_id,
+                new_sl=round(new_sl, 5),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Failed to send trailing-stop amendment",
+                order_id=order_id,
+                error=str(exc),
+            )

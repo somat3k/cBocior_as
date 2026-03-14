@@ -29,9 +29,11 @@ Environment: requires all secrets from SECRETS.md (or .env file).
 from __future__ import annotations
 
 import asyncio
+import http.server
+import json as _json
+import os
 import signal
 import sys
-import time
 import threading
 from collections import deque
 from datetime import datetime, timezone
@@ -54,36 +56,32 @@ from constants import (
     CTRADER_PORT,
     MODEL_EXPORT_DIR,
     SUPPORTED_TIMEFRAMES,
-    TRADING_SYMBOL,
-    TRADING_VOLUME,
-    TRADING_STOP_LOSS_PIPS,
-    TRADING_TAKE_PROFIT_PIPS,
     TF_1H,
-    TF_1M,
-    TF_5M,
+    TRADING_STOP_LOSS_PIPS,
+    TRADING_SYMBOL,
+    TRADING_TAKE_PROFIT_PIPS,
 )
-
-# ── Source modules ───────────────────────────────────────────────────────────
-from src.utils.logger import configure_logging, get_logger
+from src.agents.orchestrator import AgentOrchestrator
+from src.analysis.market_analyzer import MarketAnalyzer
+from src.analysis.pattern_detector import PatternDetector
+from src.analysis.signal_engine import SignalEngine
 from src.data.ctrader_client import CTraderClient, OHLCVBar
 from src.data.data_fetcher import DataFetcher
 from src.models.indicators import compute_indicators, snapshot_for_payload
-from src.models.trainer import ModelTrainer
 from src.models.quantum_algo import PhaseEstimator
-from src.analysis.pattern_detector import PatternDetector
-from src.analysis.market_analyzer import MarketAnalyzer
-from src.analysis.signal_engine import SignalEngine
+from src.models.trainer import ModelTrainer
+from src.trading.account_config import AccountConfig, get_account_configs
 from src.trading.decision_engine import DecisionEngine
 from src.trading.execution import Execution
 from src.trading.risk_manager import RiskManager
-from src.agents.orchestrator import AgentOrchestrator
+
+# ── Source modules ───────────────────────────────────────────────────────────
+from src.utils.logger import configure_logging, get_logger
 from src.utils.payload import (
     IndicatorSnapshot,
     ModelSignals,
     PayloadBuilder,
-    RiskFlags,
     TradingAction,
-    TradingPayload,
 )
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -92,6 +90,38 @@ logger = get_logger("cbot_runner")
 
 # ── Bar buffer size per timeframe ────────────────────────────────────────────
 _BUFFER_SIZE: int = 500
+
+
+# ---------------------------------------------------------------------------
+# Per-account trading context
+# ---------------------------------------------------------------------------
+
+class _AccountContext:
+    """
+    Bundles the per-account trading subsystems.
+
+    Each configured account gets its own :class:`~src.trading.risk_manager.RiskManager`
+    (seeded with the account's initial capital for position sizing) and
+    :class:`~src.trading.execution.Execution` (targeting the correct
+    cTrader account ID).
+    """
+
+    def __init__(
+        self,
+        cfg: AccountConfig,
+        ct_client: CTraderClient,
+        dry_run: bool = False,
+    ) -> None:
+        self.cfg = cfg
+        self.risk_manager = RiskManager(initial_capital=cfg.initial_capital)
+        self.execution = Execution(
+            client=ct_client,
+            dry_run=dry_run,
+            account_id=cfg.account_id,
+        )
+
+    def __repr__(self) -> str:
+        return f"_AccountContext({self.cfg.label}, account_id={self.cfg.account_id})"
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +134,13 @@ class CBotRunner:
 
     The Twisted reactor runs in a background thread; the analysis loop
     runs on the main thread (or asyncio event loop).
+
+    Dual-account trading
+    --------------------
+    The runner creates one :class:`_AccountContext` for each entry returned
+    by :func:`~src.trading.account_config.get_account_configs`.  Both
+    accounts receive the same trading signals; position sizes are scaled
+    independently to each account's initial capital.
     """
 
     def __init__(self, dry_run: bool = False) -> None:
@@ -140,12 +177,19 @@ class CBotRunner:
         self._signal_engine = SignalEngine()
         self._phase_estimator = PhaseEstimator(top_k=5)
 
-        # ── Trading subsystems ───────────────────────────────────────────
-        self._risk_manager = RiskManager()
-        self._decision_engine = DecisionEngine()
-        self._execution = Execution(
-            client=self._ct_client, dry_run=dry_run
+        # ── Dual-account trading contexts ────────────────────────────────
+        account_cfgs = get_account_configs()
+        self._account_contexts: list[_AccountContext] = [
+            _AccountContext(cfg, self._ct_client, dry_run=dry_run)
+            for cfg in account_cfgs
+        ]
+        logger.info(
+            "Trading accounts configured",
+            accounts=[str(ctx.cfg) for ctx in self._account_contexts],
         )
+
+        # Shared decision engine (signal consensus is account-independent)
+        self._decision_engine = DecisionEngine()
 
         # ── Agent orchestrator ───────────────────────────────────────────
         self._orchestrator = AgentOrchestrator()
@@ -168,10 +212,20 @@ class CBotRunner:
             dry_run=self.dry_run,
         )
         self._running = True
+        self._start_time = datetime.now(timezone.utc)
+        self._cycle_count = 0
 
         # Register graceful shutdown
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, self._handle_shutdown)
+
+        # Start health-check HTTP server in a daemon thread  (J9)
+        health_thread = threading.Thread(
+            target=self._serve_health,
+            daemon=True,
+            name="health-server",
+        )
+        health_thread.start()
 
         # Start Twisted reactor in a daemon thread.
         # installSignalHandlers=False is required when reactor.run() is called
@@ -277,6 +331,7 @@ class CBotRunner:
             await asyncio.sleep(BOT_LOOP_INTERVAL_SECONDS)
             try:
                 await self._single_cycle()
+                self._cycle_count += 1
             except Exception as exc:  # noqa: BLE001
                 logger.error("Cycle error", error=str(exc), exc_info=True)
 
@@ -370,6 +425,7 @@ class CBotRunner:
         )
 
         # Build input payload for agents
+        tf_div = signal_data.get("timeframe_divergence", False)
         input_payload = (
             PayloadBuilder()
             .source("signal_engine")
@@ -384,9 +440,16 @@ class CBotRunner:
                 market_analysis=market_analysis,
                 phase_info=phase_info,
                 signal_components=signal_data.get("components", {}),
+                timeframe_divergence=tf_div,
             )
             .build()
         )
+        if tf_div:
+            input_payload = input_payload.model_copy(
+                update={"risk_flags": input_payload.risk_flags.model_copy(
+                    update={"timeframe_divergence": True}
+                )}
+            )
         # Attach indicators + model signals
         for snap in indicator_snapshots:
             input_payload = input_payload.model_copy(
@@ -398,14 +461,18 @@ class CBotRunner:
             )
 
         # Risk check (preliminary, before agent call)
-        _risk_allowed, _risk_reason, risk_flags = self._risk_manager.evaluate(
-            input_payload, current_spread_pips=0.0
+        # Use the first account's risk manager for the pre-agent check;
+        # each account will be re-checked independently during execution.
+        _risk_allowed, _risk_reason, risk_flags = (
+            self._account_contexts[0].risk_manager.evaluate(
+                input_payload, current_spread_pips=0.0
+            )
         )
 
         # Agent orchestrator (async, potentially 4 API calls)
         agent_payload = await self._orchestrator.run(input_payload)
 
-        # Final decision
+        # Final decision (shared across all accounts)
         decision = self._decision_engine.decide(
             agent_payload=agent_payload,
             signal_data=signal_data,
@@ -421,13 +488,105 @@ class CBotRunner:
             cycle_id=decision.cycle_id,
         )
 
-        # Execute (if not HOLD)
+        # Execute on every configured account (if not HOLD)
         if decision.action != TradingAction.HOLD:
-            self._execution.execute(
-                payload=decision,
-                volume=TRADING_VOLUME,
-                stop_loss_pips=TRADING_STOP_LOSS_PIPS,
-                take_profit_pips=TRADING_TAKE_PROFIT_PIPS,
+            for ctx in self._account_contexts:
+                # Per-account risk re-check
+                acc_allowed, acc_reason, acc_flags = ctx.risk_manager.evaluate(
+                    decision, current_spread_pips=0.0
+                )
+                if not acc_allowed:
+                    logger.info(
+                        "Trade blocked for account",
+                        account=ctx.cfg.label,
+                        reason=acc_reason,
+                    )
+                    continue
+
+                # Attach per-account risk report to decision metadata (I9)
+                risk_report = ctx.risk_manager.build_risk_report()
+                enriched_decision = decision.model_copy(
+                    update={"metadata": {**decision.metadata, "risk_report": risk_report}}
+                )
+
+                # Size position relative to this account's capital
+                volume = ctx.risk_manager.compute_position_size(
+                    stop_loss_pips=TRADING_STOP_LOSS_PIPS,
+                    risk_pct=1.0,
+                )
+                ctx.execution.execute(
+                    payload=enriched_decision,
+                    volume=volume,
+                    stop_loss_pips=TRADING_STOP_LOSS_PIPS,
+                    take_profit_pips=TRADING_TAKE_PROFIT_PIPS,
+                )
+                logger.info(
+                    "Trade executed",
+                    account=ctx.cfg.label,
+                    account_id=ctx.cfg.account_id,
+                    volume=volume,
+                    action=decision.action.value,
+                    symbol=self.symbol,
+                )
+
+    # ------------------------------------------------------------------
+    # Health-check HTTP server  (J9)
+    # ------------------------------------------------------------------
+
+    def _serve_health(self, port: int = 8765) -> None:
+        """
+        Serve a minimal HTTP ``/health`` endpoint on *port*.
+
+        Response example::
+
+            {
+              "status": "ok",
+              "uptime_s": 3600,
+              "cycles": 42,
+              "symbol": "EURUSD",
+              "accounts": 2,
+              "running": true
+            }
+
+        The server is intentionally minimal (stdlib only) and runs in a
+        daemon thread so it is automatically stopped when the bot exits.
+        """
+        runner = self  # capture for closure
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802
+                if self.path in ("/health", "/health/"):
+                    uptime = (
+                        datetime.now(timezone.utc) - runner._start_time
+                    ).total_seconds()
+                    body = _json.dumps({
+                        "status": "ok",
+                        "uptime_s": round(uptime, 1),
+                        "cycles": getattr(runner, "_cycle_count", 0),
+                        "symbol": runner.symbol,
+                        "accounts": len(runner._account_contexts),
+                        "running": runner._running,
+                    }).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args: Any) -> None:  # silence access log
+                pass
+
+        host = os.environ.get("HEALTH_HOST", "127.0.0.1")
+        try:
+            server = http.server.HTTPServer((host, port), _Handler)
+            logger.info("Health endpoint started", host=host, port=port, path="/health")
+            server.serve_forever()
+        except OSError as exc:
+            logger.warning(
+                "Could not start health server", host=host, port=port, error=str(exc)
             )
 
     # ------------------------------------------------------------------

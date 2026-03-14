@@ -45,7 +45,14 @@ CTRADER_CLIENT_ID: str = _req("CTRADER_CLIENT_ID")
 CTRADER_CLIENT_SECRET: str = _req("CTRADER_CLIENT_SECRET")
 CTRADER_ACCESS_TOKEN: str = _req("CTRADER_ACCESS_TOKEN")
 CTRADER_REFRESH_TOKEN: str = _opt("CTRADER_REFRESH_TOKEN")
+# Primary account (Account 1, initial capital 10 000)
 CTRADER_ACCOUNT_ID: int = int(_req("CTRADER_ACCOUNT_ID"))
+# Secondary account (Account 2, initial capital 50).
+# Defaults to the same ID as the primary so the bot works when only one
+# account is configured; supply a real second account ID in production.
+CTRADER_ACCOUNT_ID_ACC2: int = int(
+    _opt("CTRADER_ACCOUNT_ID_ACC2", str(_req("CTRADER_ACCOUNT_ID")))
+)
 CTRADER_ENVIRONMENT: str = _opt("CTRADER_ENVIRONMENT", "DEMO").upper()
 
 # Derived endpoints
@@ -105,11 +112,16 @@ MODEL_EXPORT_DIR: Path = Path(_opt("MODEL_EXPORT_DIR", "./exports"))
 DATA_DIR: Path = Path(_opt("DATA_DIR", "./data"))
 
 # Training schedule (per timeframe)
-TRAIN_1M_TRADES: int = int(_opt("TRAIN_1M_TRADES", "2000"))
+# Candle counts set to the maximum practical range for each timeframe:
+#   M1  — 10 000 bars ≈ 7 days of 1-minute data
+#   M5  —  5 000 bars ≈ 17 days of 5-minute data
+#   H1  —  2 000 bars ≈ 83 days (~3 months) of hourly data
+# These defaults request the maximum useful history from HyperLiquid/cTrader.
+TRAIN_1M_TRADES: int = int(_opt("TRAIN_1M_TRADES", "10000"))
 TRAIN_1M_EPOCHS: int = int(_opt("TRAIN_1M_EPOCHS", "200"))
-TRAIN_5M_TRADES: int = int(_opt("TRAIN_5M_TRADES", "1000"))
+TRAIN_5M_TRADES: int = int(_opt("TRAIN_5M_TRADES", "5000"))
 TRAIN_5M_EPOCHS: int = int(_opt("TRAIN_5M_EPOCHS", "200"))
-TRAIN_1H_TRADES: int = int(_opt("TRAIN_1H_TRADES", "250"))
+TRAIN_1H_TRADES: int = int(_opt("TRAIN_1H_TRADES", "2000"))
 TRAIN_1H_EPOCHS: int = int(_opt("TRAIN_1H_EPOCHS", "200"))
 
 # ─── Timeframe constants ──────────────────────────────────────────────────
@@ -125,6 +137,66 @@ BOT_ANALYSIS_COOLDOWN_SECONDS: int = int(
 )
 BOT_MAX_CONCURRENT_AGENTS: int = int(_opt("BOT_MAX_CONCURRENT_AGENTS", "4"))
 LOG_LEVEL: str = _opt("LOG_LEVEL", "INFO").upper()
+
+# ─── Training Symbols ─────────────────────────────────────────────────────
+# All symbols for which models are trained on historical OHLCV data.
+# cTrader symbol names may differ from exchange names — see cTrader docs.
+TRAINING_SYMBOLS: tuple[str, ...] = (
+    "XAUUSD",   # Gold (XAU vs USD)
+    "GOOGL",    # Alphabet / Google
+    "AMD",      # Advanced Micro Devices
+    "US30",     # Dow Jones Industrial Average
+    "US100",    # Nasdaq 100
+    "BTCUSD",   # Bitcoin
+    "ETHUSD",   # Ethereum
+    "FLOKIUSD", # Floki
+    "BONKUSD",  # Bonk
+    "SHIBUSD",  # Shiba Inu
+    "ADAUSD",   # Cardano
+    "LTCUSD",   # Litecoin
+    "XRPUSD",   # XRP
+    "SOLUSD",   # Solana
+    "EURUSD",   # Euro / USD
+    "GBPUSD",   # British Pound / USD
+    "NZDCAD",   # New Zealand Dollar / Canadian Dollar
+    "USDJPY",   # USD / Japanese Yen
+)
+
+# HyperLiquid symbol names corresponding to the TRAINING_SYMBOLS list above
+# (used when the cTrader / cAlgo primary feed is unavailable).
+# Note: HyperLiquid primarily supports crypto perpetuals.  For forex and
+# equity-index symbols the mapping is best-effort; if HyperLiquid does not
+# list the coin the fetcher returns an empty result and the pipeline falls
+# back to previously saved CSV data.
+HYPERLIQUID_SYMBOL_MAP: dict[str, str] = {
+    "XAUUSD":   "XAU",
+    "GOOGL":    "GOOGL",
+    "AMD":      "AMD",
+    "US30":     "DJI",     # TODO: verify HyperLiquid coin name for Dow Jones index
+    "US100":    "NDX",     # TODO: verify HyperLiquid coin name for Nasdaq 100 index
+    "BTCUSD":   "BTC",
+    "ETHUSD":   "ETH",
+    "FLOKIUSD": "FLOKI",
+    "BONKUSD":  "BONK",
+    "SHIBUSD":  "SHIB",
+    "ADAUSD":   "ADA",
+    "LTCUSD":   "LTC",
+    "XRPUSD":   "XRP",
+    "SOLUSD":   "SOL",
+    "EURUSD":   "EURUSD",  # HyperLiquid forex pair identifier
+    "GBPUSD":   "GBPUSD",  # HyperLiquid forex pair identifier
+    "NZDCAD":   "NZDCAD",  # HyperLiquid forex pair identifier
+    "USDJPY":   "USDJPY",  # HyperLiquid forex pair identifier
+}
+
+# ─── Account Capitals ─────────────────────────────────────────────────────
+INITIAL_CAPITAL_ACC1: float = float(_opt("INITIAL_CAPITAL_ACC1", "10000"))
+INITIAL_CAPITAL_ACC2: float = float(_opt("INITIAL_CAPITAL_ACC2", "50"))
+
+# ─── Redis Cache ──────────────────────────────────────────────────────────
+REDIS_URL: str = _opt("REDIS_URL", "redis://localhost:6379/0")
+REDIS_CACHE_TTL_SECONDS: int = int(_opt("REDIS_CACHE_TTL_SECONDS", "3600"))
+REDIS_ENABLED: bool = _opt("REDIS_ENABLED", "true").lower() == "true"
 
 # ─── Indicator windows (defaults) ─────────────────────────────────────────
 RSI_PERIOD: int = 14
