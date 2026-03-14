@@ -151,7 +151,6 @@ def _coerce_prompt(prompt_obj: Any) -> str | None:
         return template
     formatter = getattr(prompt_obj, "format", None)
     if callable(formatter):
-        signature = None
         try:
             signature = inspect.signature(formatter)
         except (TypeError, ValueError):
@@ -195,8 +194,8 @@ def _resolve_template(key: str, fallback: str) -> str:
 
 def _inject_context(template: str, context: dict[str, Any]) -> str:
     rendered = template
-    for key in context:
-        rendered = rendered.replace(f"{{{key}}}", f"${key}")
+    for key, value in context.items():
+        rendered = rendered.replace(f"{{{key}}}", str(value))
     return Template(rendered).safe_substitute(context)
 
 
