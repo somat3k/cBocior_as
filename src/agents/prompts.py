@@ -107,11 +107,11 @@ class PromptHub:
         self._client: Any | None = None
         try:
             from langsmith import Client
-        except Exception:  # noqa: BLE001
+        except ImportError:
             return
         try:
             self._client = Client()
-        except Exception as exc:  # noqa: BLE001
+        except (ValueError, RuntimeError, ConnectionError) as exc:
             logger.warning("LangSmith client init failed", error=str(exc))
             self._client = None
 
@@ -123,7 +123,7 @@ class PromptHub:
             return None
         try:
             prompt_obj = puller(prompt_id)
-        except Exception as exc:  # noqa: BLE001
+        except (ValueError, RuntimeError, ConnectionError) as exc:
             logger.warning(
                 "LangSmith prompt pull failed",
                 prompt_id=prompt_id,
@@ -152,7 +152,7 @@ def _coerce_prompt(prompt_obj: Any) -> str | None:
             formatted = formatter()
             if isinstance(formatted, str):
                 return formatted
-        except Exception:  # noqa: BLE001
+        except (TypeError, ValueError):
             pass
     return str(prompt_obj)
 
