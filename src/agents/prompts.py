@@ -107,10 +107,10 @@ class PromptHub:
 
     def __init__(self) -> None:
         self._client: Any | None = None
+        client_cls = None
         try:
             from langsmith import Client
         except ImportError:
-            client_cls = None
             logger.debug("LangSmith client unavailable, using default prompts")
         else:
             client_cls = Client
@@ -215,8 +215,10 @@ def _inject_context(template: str, context: dict[str, Any]) -> str:
         return Template(template).substitute(context)
     except KeyError as exc:
         missing = exc.args[0] if exc.args else "unknown"
+        snippet = template[:160].replace("\n", "\\n")
         raise ValueError(
-            f"Missing prompt template variable: {missing}"
+            f"Missing prompt template variable '{missing}' in template: "
+            f"'{snippet}'"
         ) from exc
 
 
