@@ -61,8 +61,8 @@ class GroqAgent(BaseAgent):
                 "comma-separated list of model IDs."
             )
 
-        last_error: GroqError | None = None
-        for model in self._models:
+        total_models = len(self._models)
+        for index, model in enumerate(self._models):
             try:
                 logger.debug("Calling Groq", model=model)
                 response = await self._client.chat.completions.create(
@@ -75,8 +75,9 @@ class GroqAgent(BaseAgent):
                     max_tokens=128,
                 )
             except GroqError as exc:
-                last_error = exc
                 logger.warning("Groq model call failed", model=model, error=str(exc))
+                if index == total_models - 1:
+                    raise
                 continue
 
             raw = response.choices[0].message.content or "{}"
@@ -87,5 +88,6 @@ class GroqAgent(BaseAgent):
                 update={"confidence": min(result.confidence, 0.6)}
             )
 
-        assert last_error is not None
-        raise last_error
+        raise RuntimeError(
+            f"All Groq model attempts failed (tried: {', '.join(self._models)})"
+        )
