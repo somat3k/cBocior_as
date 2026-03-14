@@ -199,15 +199,17 @@ class TestGroqAgent:
         mock_response = MagicMock()
         mock_response.choices = [mock_choice]
 
-        with patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"):
-            with patch("src.agents.groq_agent.AsyncGroq") as MockGroq:
-                mock_client = MagicMock()
-                MockGroq.return_value = mock_client
-                mock_client.chat.completions.create = AsyncMock(
-                    side_effect=[GroqError("bad model"), mock_response]
-                )
-                agent = GroqAgent()
-                result = asyncio.run(agent._call(_make_payload()))
+        with (
+            patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"),
+            patch("src.agents.groq_agent.AsyncGroq") as MockGroq,
+        ):
+            mock_client = MagicMock()
+            MockGroq.return_value = mock_client
+            mock_client.chat.completions.create = AsyncMock(
+                side_effect=[GroqError("bad model"), mock_response]
+            )
+            agent = GroqAgent()
+            result = asyncio.run(agent._call(_make_payload()))
 
         assert result.action == TradingAction.BUY
         assert (
@@ -223,16 +225,18 @@ class TestGroqAgent:
         from groq import GroqError
         from src.agents.groq_agent import GroqAgent
 
-        with patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"):
-            with patch("src.agents.groq_agent.AsyncGroq") as MockGroq:
-                mock_client = MagicMock()
-                MockGroq.return_value = mock_client
-                mock_client.chat.completions.create = AsyncMock(
-                    side_effect=[GroqError("bad model"), GroqError("down")]
-                )
-                agent = GroqAgent()
-                with pytest.raises(GroqError):
-                    asyncio.run(agent._call(_make_payload()))
+        with (
+            patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"),
+            patch("src.agents.groq_agent.AsyncGroq") as MockGroq,
+        ):
+            mock_client = MagicMock()
+            MockGroq.return_value = mock_client
+            mock_client.chat.completions.create = AsyncMock(
+                side_effect=[GroqError("bad model"), GroqError("down")]
+            )
+            agent = GroqAgent()
+            with pytest.raises(GroqError):
+                asyncio.run(agent._call(_make_payload()))
 
 
 # ---------------------------------------------------------------------------

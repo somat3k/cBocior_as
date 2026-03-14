@@ -58,7 +58,11 @@ class GroqAgent(BaseAgent):
         if not self._models:
             raise RuntimeError("No Groq models configured")
 
-        last_error: GroqError | None = None
+        fallback_error = RuntimeError(
+            "All Groq model attempts failed (tried: "
+            f"{', '.join(self._models)}), but no error was captured"
+        )
+        last_error: Exception = fallback_error
         for model in self._models:
             try:
                 logger.debug("Calling Groq", model=model)
@@ -84,6 +88,4 @@ class GroqAgent(BaseAgent):
                 update={"confidence": min(result.confidence, 0.6)}
             )
 
-        raise last_error or RuntimeError(
-            f"All Groq model attempts failed: {', '.join(self._models)}"
-        )
+        raise last_error
