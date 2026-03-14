@@ -28,6 +28,7 @@ _PROMPT_ENV_KEYS: dict[str, str] = {
     "openrouter_user": "LANGSMITH_PROMPT_OPENROUTER_USER",
 }
 PROMPT_ENV_VARS: tuple[str, ...] = tuple(_PROMPT_ENV_KEYS.values())
+_MAX_TEMPLATE_SNIPPET_LENGTH = 160
 
 # ---------------------------------------------------------------------------
 # Default templates (fallbacks)
@@ -205,7 +206,7 @@ def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
         return None
     logger.debug("Pulling LangSmith prompt", key=key, prompt_id=prompt_id)
     try:
-        return _prompt_hub().pull(prompt_id)
+        template = _prompt_hub().pull(prompt_id)
     except (ConnectionError, RuntimeError, ValueError) as exc:
         logger.warning(
             "LangSmith prompt pull raised error",
@@ -215,6 +216,17 @@ def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
             error=str(exc),
         )
         return None
+    if template is None:
+        return None
+    if not isinstance(template, str):
+        logger.warning(
+            "LangSmith prompt returned non-string",
+            key=key,
+            prompt_id=prompt_id,
+            value_type=type(template).__name__,
+        )
+        return None
+    return template
 
 
 def _resolve_template(key: str, fallback: str) -> str:
@@ -236,13 +248,13 @@ def _inject_context(template: str, context: dict[str, Any]) -> str:
         return Template(template).substitute(context)
     except KeyError as exc:
         missing = exc.args[0] if exc.args else "unknown"
-        snippet = template[:160].replace("\n", "\\n")
+        snippet = template[:_MAX_TEMPLATE_SNIPPET_LENGTH].replace("\n", "\\n")
         raise ValueError(
             f"Missing prompt template variable '{missing}' in template: "
             f"'{snippet}'"
         ) from exc
     except ValueError as exc:
-        snippet = template[:160].replace("\n", "\\n")
+        snippet = template[:_MAX_TEMPLATE_SNIPPET_LENGTH].replace("\n", "\\n")
         raise ValueError(
             "Invalid prompt template placeholder; ensure placeholders use "
             "$name syntax and escape literal '$' as '$$'. "
