@@ -160,7 +160,7 @@ def _coerce_prompt(prompt_obj: Any) -> str | None:
             signature = None
         if signature:
             requires_args = any(
-                param.default is inspect._empty
+                param.default is inspect.Parameter.empty
                 and param.kind
                 in (
                     inspect.Parameter.POSITIONAL_ONLY,
@@ -207,7 +207,13 @@ def _resolve_template(key: str, fallback: str) -> str:
 
 
 def _inject_context(template: str, context: dict[str, Any]) -> str:
-    return Template(template).safe_substitute(context)
+    try:
+        return Template(template).substitute(context)
+    except KeyError as exc:
+        missing = exc.args[0] if exc.args else "unknown"
+        raise ValueError(
+            f"Missing prompt template variable: {missing}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------

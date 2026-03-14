@@ -24,6 +24,7 @@ class TestPromptTemplates:
         assert "gemini-market" in prompt
         assert "multi-timeframe" in prompt.lower()
         assert "1M, 5M, and 1H" in prompt
+        assert "Default to HOLD on divergence" in prompt
         assert "timeframe_divergence" in prompt
 
     def test_groq_prompts_contain_expected_content(self) -> None:
