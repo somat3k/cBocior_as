@@ -27,6 +27,7 @@ _PROMPT_ENV_KEYS: dict[str, str] = {
     "openrouter_system": "LANGSMITH_PROMPT_OPENROUTER_SYSTEM",
     "openrouter_user": "LANGSMITH_PROMPT_OPENROUTER_USER",
 }
+PROMPT_ENV_VARS: tuple[str, ...] = tuple(_PROMPT_ENV_KEYS.values())
 
 # ---------------------------------------------------------------------------
 # Default templates (fallbacks)
@@ -205,7 +206,7 @@ def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
     logger.debug("Pulling LangSmith prompt", key=key, prompt_id=prompt_id)
     try:
         return _prompt_hub().pull(prompt_id)
-    except Exception as exc:  # noqa: BLE001
+    except (ConnectionError, RuntimeError, ValueError) as exc:
         logger.warning(
             "LangSmith prompt pull raised error",
             key=key,
