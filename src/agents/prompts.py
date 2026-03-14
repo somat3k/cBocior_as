@@ -26,7 +26,7 @@ LANGSMITH_PROMPT_ENV_VARS: tuple[str, ...] = tuple(_PROMPT_ENV_KEYS.values())
 _MAX_TEMPLATE_SNIPPET_LENGTH = 160
 
 # ---------------------------------------------------------------------------
-# Default template (fallback)
+# Default templates (fallbacks)
 # ---------------------------------------------------------------------------
 
 _GROQ_SYSTEM = (

@@ -1,5 +1,5 @@
 """
-tests/test_agents.py — Unit tests for the Groq agent and orchestrator.
+tests/test_agents.py -- Unit tests for the Groq agent and orchestrator.
 
 Mocks external API calls to verify the correct payload schema and fallback
 behaviour.  (E8 + E9)

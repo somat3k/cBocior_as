@@ -1,9 +1,9 @@
 """
 src/agents/orchestrator.py — Groq-only orchestrator.
 
-Uses a single Groq OSS 120B model for signal generation. The Groq agent
-acts as the sole decision engine for model outputs; other providers have
-been removed from the orchestration flow.
+Uses the Groq agent configured via GROQ_MODEL for signal generation. The
+Groq agent acts as the sole decision engine for model outputs; other
+providers have been removed from the orchestration flow.
 """
 
 from __future__ import annotations
