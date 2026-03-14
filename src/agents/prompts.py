@@ -8,8 +8,10 @@ prompt IDs if you want to pull templates from LangSmith.
 
 from __future__ import annotations
 
+import inspect
 import os
 from functools import lru_cache
+from string import Template
 from typing import Any
 
 from src.utils.logger import get_logger
@@ -108,6 +110,7 @@ class PromptHub:
         try:
             from langsmith import Client
         except ImportError:
+            logger.debug("LangSmith client unavailable, using default prompts")
             return
         try:
             self._client = Client()
@@ -148,12 +151,23 @@ def _coerce_prompt(prompt_obj: Any) -> str | None:
         return template
     formatter = getattr(prompt_obj, "format", None)
     if callable(formatter):
+        signature = None
         try:
-            formatted = formatter()
-            if isinstance(formatted, str):
-                return formatted
+            signature = inspect.signature(formatter)
         except (TypeError, ValueError):
-            pass
+            signature = None
+        if signature and signature.parameters:
+            logger.debug(
+                "Prompt formatter requires arguments; skipping",
+                params=list(signature.parameters),
+            )
+        else:
+            try:
+                formatted = formatter()
+                if isinstance(formatted, str):
+                    return formatted
+            except (TypeError, ValueError):
+                logger.debug("Prompt formatter failed without args")
     return str(prompt_obj)
 
 
@@ -181,9 +195,9 @@ def _resolve_template(key: str, fallback: str) -> str:
 
 def _inject_context(template: str, context: dict[str, Any]) -> str:
     rendered = template
-    for key, value in context.items():
-        rendered = rendered.replace(f"{{{key}}}", str(value))
-    return rendered
+    for key in context:
+        rendered = rendered.replace(f"{{{key}}}", f"${key}")
+    return Template(rendered).safe_substitute(context)
 
 
 # ---------------------------------------------------------------------------

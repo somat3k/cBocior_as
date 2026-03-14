@@ -17,18 +17,25 @@ class TestPromptTemplates:
         system, user = build_openai_prompts("market-data")
         assert "BUY|SELL|HOLD" in system
         assert "market-data" in user
+        assert "{market_data}" not in user
 
     def test_gemini_prompt_includes_market_data(self) -> None:
         prompt = build_gemini_prompt("gemini-market")
         assert "gemini-market" in prompt
-        assert "timeframe" in prompt.lower()
+        assert "multi-timeframe" in prompt.lower()
+        assert "1m, 5m, and 1h" in prompt.lower()
+        assert "timeframe_divergence" in prompt
 
     def test_groq_prompts_include_snapshot(self) -> None:
         system, user = build_groq_prompts("snapshot-json")
         assert "BUY|SELL|HOLD" in system
+        assert "decisive and fast" in system.lower()
+        assert "<30 words" in system
         assert "snapshot-json" in user
 
     def test_openrouter_prompts_include_market_data(self) -> None:
         system, user = build_openrouter_prompts("router-market")
         assert "consensus" in system.lower()
+        assert "default to hold" in system.lower()
+        assert "most conservative" in system.lower()
         assert "router-market" in user
