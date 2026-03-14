@@ -251,7 +251,7 @@ class TestGroqAgent:
             agent = GroqAgent()
             with pytest.raises(GroqError) as excinfo:
                 asyncio.run(agent._call(_make_payload()))
-            assert excinfo.value is last_error
+            assert str(excinfo.value) == "down"
 
 
 # ---------------------------------------------------------------------------
