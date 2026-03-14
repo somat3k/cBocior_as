@@ -22,6 +22,7 @@ class TestPromptTemplates:
     def test_gemini_prompt_contains_expected_content(self) -> None:
         prompt = build_gemini_prompt("gemini-market")
         assert "gemini-market" in prompt
+        assert "$market_data" not in prompt
         assert "multi-timeframe" in prompt.lower()
         assert "1M, 5M, and 1H" in prompt
         assert "Default to HOLD on divergence" in prompt

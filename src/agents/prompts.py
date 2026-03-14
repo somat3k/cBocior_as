@@ -107,12 +107,13 @@ class PromptHub:
 
     def __init__(self) -> None:
         self._client: Any | None = None
-        client_cls = None
         try:
             from langsmith import Client
-            client_cls = Client
         except ImportError:
+            client_cls = None
             logger.debug("LangSmith client unavailable, using default prompts")
+        else:
+            client_cls = Client
 
         if client_cls is not None:
             try:
@@ -159,17 +160,7 @@ def _coerce_prompt(prompt_obj: Any) -> str | None:
         except (TypeError, ValueError):
             signature = None
         if signature:
-            requires_args = any(
-                param.default is inspect.Parameter.empty
-                and param.kind
-                in (
-                    inspect.Parameter.POSITIONAL_ONLY,
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    inspect.Parameter.KEYWORD_ONLY,
-                )
-                for param in signature.parameters.values()
-            )
-            if requires_args:
+            if _has_required_params(signature):
                 logger.debug(
                     "Prompt formatter requires arguments; skipping",
                     params=list(signature.parameters),
@@ -182,6 +173,19 @@ def _coerce_prompt(prompt_obj: Any) -> str | None:
         except (TypeError, ValueError):
             logger.debug("Prompt formatter failed without args")
     return str(prompt_obj)
+
+
+def _has_required_params(signature: inspect.Signature) -> bool:
+    return any(
+        param.default is inspect.Parameter.empty
+        and param.kind
+        in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        )
+        for param in signature.parameters.values()
+    )
 
 
 def _prompt_id(key: str) -> str | None:
