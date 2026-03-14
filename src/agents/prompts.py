@@ -197,13 +197,22 @@ def _prompt_id(key: str) -> str | None:
     return value or None
 
 
-@lru_cache(maxsize=len(_PROMPT_ENV_KEYS))
+@lru_cache(maxsize=None)
 def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
     """Cache prompt lookups per (key, prompt_id) pair."""
     if not prompt_id:
         return None
     logger.debug("Pulling LangSmith prompt", key=key, prompt_id=prompt_id)
-    return _prompt_hub().pull(prompt_id)
+    try:
+        return _prompt_hub().pull(prompt_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "LangSmith prompt pull raised error",
+            key=key,
+            prompt_id=prompt_id,
+            error=str(exc),
+        )
+        return None
 
 
 def _resolve_template(key: str, fallback: str) -> str:
