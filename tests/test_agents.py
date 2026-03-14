@@ -188,6 +188,18 @@ class TestGroqAgent:
         assert result.action == TradingAction.SELL
         assert result.source == "groq"
 
+    def test_empty_model_list_raises(self) -> None:
+        from src.agents.groq_agent import GroqAgent
+
+        with (
+            patch("src.agents.groq_agent.GROQ_MODEL", "   "),
+            patch("src.agents.groq_agent.AsyncGroq") as MockGroq,
+        ):
+            MockGroq.return_value = MagicMock()
+            agent = GroqAgent()
+            with pytest.raises(RuntimeError, match="No Groq models configured"):
+                asyncio.run(agent._call(_make_payload()))
+
     def test_falls_back_to_next_model(self) -> None:
         from groq import GroqError
         from src.agents.groq_agent import GroqAgent

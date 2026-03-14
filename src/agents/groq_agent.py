@@ -61,10 +61,7 @@ class GroqAgent(BaseAgent):
                 "comma-separated list of model IDs."
             )
 
-        fallback_error = RuntimeError(
-            f"All Groq model attempts failed (tried: {', '.join(self._models)})"
-        )
-        last_error: Exception = fallback_error
+        last_error: GroqError | None = None
         for model in self._models:
             try:
                 logger.debug("Calling Groq", model=model)
@@ -90,4 +87,8 @@ class GroqAgent(BaseAgent):
                 update={"confidence": min(result.confidence, 0.6)}
             )
 
+        if last_error is None:
+            raise RuntimeError(
+                f"All Groq model attempts failed (tried: {', '.join(self._models)})"
+            )
         raise last_error
