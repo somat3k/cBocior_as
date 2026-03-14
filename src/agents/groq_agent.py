@@ -29,6 +29,12 @@ class GroqAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__(timeout=GROQ_TIMEOUT)
         self._client = AsyncGroq(api_key=GROQ_API_KEY)
+        self._models = self._parse_model_list(GROQ_MODEL)
+
+    @staticmethod
+    def _parse_model_list(raw: str) -> list[str]:
+        models = [model.strip() for model in raw.split(",") if model.strip()]
+        return models or ["oss-120b"]
 
     async def _call(self, payload: TradingPayload) -> TradingPayload:
         # Compact prompt to minimise tokens (< 500 tokens total)
@@ -50,21 +56,30 @@ class GroqAgent(BaseAgent):
 
         system_prompt, user_prompt = build_groq_prompts(compact)
 
-        logger.debug("Calling Groq", model=GROQ_MODEL)
-        response = await self._client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.0,
-            max_tokens=128,
-        )
+        last_error: Exception | None = None
+        for model in self._models:
+            try:
+                logger.debug("Calling Groq", model=model)
+                response = await self._client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.0,
+                    max_tokens=128,
+                )
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                logger.warning("Groq model call failed", model=model, error=str(exc))
+                continue
 
-        raw = response.choices[0].message.content or "{}"
-        result = self._parse_llm_response(raw, payload)
+            raw = response.choices[0].message.content or "{}"
+            result = self._parse_llm_response(raw, payload)
 
-        # Groq confidence capped at 0.6 (speed-only mode)
-        return result.model_copy(
-            update={"confidence": min(result.confidence, 0.6)}
-        )
+            # Groq confidence capped at 0.6 (speed-only mode)
+            return result.model_copy(
+                update={"confidence": min(result.confidence, 0.6)}
+            )
+
+        raise last_error or RuntimeError("No Groq models configured")

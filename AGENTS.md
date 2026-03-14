@@ -21,6 +21,8 @@ in production.
 1. **Groq OSS 120B** (via `GROQ_MODEL`) produces the trading signal (`BUY` / `SELL` / `HOLD`
    + confidence 0–1).
 2. The orchestrator returns the Groq payload directly.
+3. `GROQ_MODEL` may be a comma-separated list; models are tried in order until
+   one succeeds.
 
 ### 2.2 Degraded Operation (Groq unavailable)
 * If Groq fails or times out → return a HOLD payload and log a critical alert.

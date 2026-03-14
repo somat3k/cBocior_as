@@ -120,6 +120,10 @@ and merged into a unified feature vector for the models:
 2. **DecisionEngine** → confidence gate (>= 0.65)
 3. **RiskManager** → spread, drawdown, daily loss checks
 
+`GROQ_MODEL` accepts a comma-separated list of model IDs. The Groq agent
+tries each model in order (first is preferred), falling back on the next
+model if the previous one errors.
+
 See [AGENTS.md](AGENTS.md) for full delegation rules.
 
 ---

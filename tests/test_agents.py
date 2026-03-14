@@ -198,6 +198,38 @@ class TestGroqAgent:
         assert result.action == TradingAction.SELL
         assert result.source == "groq"
 
+    def test_falls_back_to_next_model(self) -> None:
+        from src.agents.groq_agent import GroqAgent
+
+        mock_message = MagicMock()
+        mock_message.content = _mock_llm_response("BUY", 0.71)
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        with patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"):
+            with patch("src.agents.groq_agent.AsyncGroq") as MockGroq:
+                mock_client = MagicMock()
+                MockGroq.return_value = mock_client
+                mock_client.chat.completions.create = AsyncMock(
+                    side_effect=[RuntimeError("bad model"), mock_response]
+                )
+                agent = GroqAgent()
+                result = asyncio.get_event_loop().run_until_complete(
+                    agent._call(_make_payload())
+                )
+
+        assert result.action == TradingAction.BUY
+        assert (
+            mock_client.chat.completions.create.call_args_list[0].kwargs["model"]
+            == "oss-120b"
+        )
+        assert (
+            mock_client.chat.completions.create.call_args_list[1].kwargs["model"]
+            == "backup-model"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Orchestrator Groq-only flow  (E9)

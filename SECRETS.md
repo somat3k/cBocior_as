@@ -28,7 +28,7 @@ When running locally, copy `.env.example` to `.env` and populate it.
 | Secret name | Description | Where to get it |
 |---|---|---|
 | `GROQ_API_KEY` | Groq Cloud API key (`gsk_...`) | [console.groq.com/keys](https://console.groq.com/keys) |
-| `GROQ_MODEL` | Model identifier (default `oss-120b`) | Optional override |
+| `GROQ_MODEL` | Comma-separated model list (default `oss-120b,llama-3.1-70b-versatile,llama-3.1-8b-instant`) | Optional override |
 
 ### LangSmith
 
