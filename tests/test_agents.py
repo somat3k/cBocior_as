@@ -1,8 +1,8 @@
 """
-tests/test_agents.py — Unit tests for AI agents and orchestrator.
+tests/test_agents.py -- Unit tests for the Groq agent and orchestrator.
 
-Mocks all external API calls to verify the correct payload schema,
-fallback behaviour, and majority-vote logic.  (E11 + E12)
+Mocks external API calls to verify the correct payload schema and fallback
+behaviour.  (E8 + E9)
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ class TestBaseAgentRetry:
         agent = _SometimesFailAgent(fail_times=1)
         payload = _make_payload()
         with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
-            result = asyncio.get_event_loop().run_until_complete(agent.analyse(payload))
+            result = asyncio.run(agent.analyse(payload))
         assert result.source == "sometimes_fail"
         assert agent._call_count == 2  # 1 fail + 1 success
 
@@ -77,9 +77,7 @@ class TestBaseAgentRetry:
         with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
             for _ in range(MAX_RETRIES):
                 with pytest.raises(AgentError):
-                    asyncio.get_event_loop().run_until_complete(
-                        agent.analyse(_make_payload())
-                    )
+                    asyncio.run(agent.analyse(_make_payload()))
         assert agent.degraded
 
     def test_degraded_reset_on_success(self) -> None:
@@ -90,16 +88,12 @@ class TestBaseAgentRetry:
         with patch("asyncio.sleep", new=AsyncMock(return_value=None)):
             for _ in range(MAX_RETRIES):
                 with pytest.raises(AgentError):
-                    asyncio.get_event_loop().run_until_complete(
-                        agent.analyse(_make_payload())
-                    )
+                    asyncio.run(agent.analyse(_make_payload()))
         assert agent.degraded
 
         # Now allow success
         agent._fail_times = 0
-        result = asyncio.get_event_loop().run_until_complete(
-            agent.analyse(_make_payload())
-        )
+        result = asyncio.run(agent.analyse(_make_payload()))
         assert not agent.degraded
         assert result is not None
 
@@ -117,9 +111,7 @@ class TestBaseAgentRetry:
         agent = _SlowAgent(timeout=0.01)
         # Do NOT mock asyncio.sleep here — we need the real one for wait_for to fire
         with pytest.raises(AgentError):
-            asyncio.get_event_loop().run_until_complete(
-                agent.analyse(_make_payload())
-            )
+            asyncio.run(agent.analyse(_make_payload()))
 
 
 # ---------------------------------------------------------------------------
@@ -176,45 +168,6 @@ class TestParseLlmResponse:
 # Individual agent mock tests  (E11)
 # ---------------------------------------------------------------------------
 
-class TestOpenAIAgent:
-    def test_returns_buy_signal_from_mock(self) -> None:
-        from src.agents.openai_agent import OpenAIAgent
-
-        mock_response = MagicMock()
-        mock_response.choices[0].message.content = _mock_llm_response("BUY", 0.85)
-
-        with patch("src.agents.openai_agent.AsyncOpenAI") as MockClient:
-            mock_client_instance = MagicMock()
-            MockClient.return_value = mock_client_instance
-            mock_client_instance.chat.completions.create = AsyncMock(
-                return_value=mock_response
-            )
-            agent = OpenAIAgent()
-            result = asyncio.get_event_loop().run_until_complete(
-                agent._call(_make_payload())
-            )
-        assert result.action == TradingAction.BUY
-        assert result.source == "openai"
-
-    def test_falls_back_to_hold_on_empty_response(self) -> None:
-        from src.agents.openai_agent import OpenAIAgent
-
-        mock_response = MagicMock()
-        mock_response.choices[0].message.content = ""
-
-        with patch("src.agents.openai_agent.AsyncOpenAI") as MockClient:
-            mock_client_instance = MagicMock()
-            MockClient.return_value = mock_client_instance
-            mock_client_instance.chat.completions.create = AsyncMock(
-                return_value=mock_response
-            )
-            agent = OpenAIAgent()
-            result = asyncio.get_event_loop().run_until_complete(
-                agent._call(_make_payload())
-            )
-        assert result.action == TradingAction.HOLD
-
-
 class TestGroqAgent:
     def test_returns_sell_signal_from_mock(self) -> None:
         from src.agents.groq_agent import GroqAgent
@@ -231,126 +184,101 @@ class TestGroqAgent:
             MockGroq.return_value = mock_client
             mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
             agent = GroqAgent()
-            result = asyncio.get_event_loop().run_until_complete(
-                agent._call(_make_payload())
-            )
+            result = asyncio.run(agent._call(_make_payload()))
         assert result.action == TradingAction.SELL
         assert result.source == "groq"
 
+    def test_empty_model_list_raises(self) -> None:
+        from src.agents.groq_agent import GroqAgent
 
-class TestGeminiAgent:
-    def test_returns_hold_signal_from_mock(self) -> None:
-        from src.agents.gemini_agent import GeminiAgent
+        with (
+            patch("src.agents.groq_agent.GROQ_MODEL", "   "),
+            patch("src.agents.groq_agent.AsyncGroq") as MockGroq,
+        ):
+            MockGroq.return_value = MagicMock()
+            agent = GroqAgent()
+            with pytest.raises(RuntimeError, match="No Groq models configured"):
+                asyncio.run(agent._call(_make_payload()))
 
-        mock_part = MagicMock()
-        mock_part.text = _mock_llm_response("HOLD", 0.55)
+    def test_falls_back_to_next_model(self) -> None:
+        from groq import GroqError
+        from src.agents.groq_agent import GroqAgent
+
+        mock_message = MagicMock()
+        mock_message.content = _mock_llm_response("BUY", 0.71)
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
         mock_response = MagicMock()
-        mock_response.candidates[0].content.parts = [mock_part]
+        mock_response.choices = [mock_choice]
 
-        with patch("src.agents.gemini_agent.genai") as MockGenai:
-            mock_model = MagicMock()
-            MockGenai.GenerativeModel.return_value = mock_model
-            mock_model.generate_content_async = AsyncMock(return_value=mock_response)
-            agent = GeminiAgent()
-            result = asyncio.get_event_loop().run_until_complete(
-                agent._call(_make_payload())
+        with (
+            patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"),
+            patch("src.agents.groq_agent.AsyncGroq") as MockGroq,
+        ):
+            mock_client = MagicMock()
+            MockGroq.return_value = mock_client
+            mock_client.chat.completions.create = AsyncMock(
+                side_effect=[GroqError("bad model"), mock_response]
             )
-        assert result.action == TradingAction.HOLD
-        assert result.source == "gemini"
+            agent = GroqAgent()
+            result = asyncio.run(agent._call(_make_payload()))
+
+        assert result.action == TradingAction.BUY
+        assert (
+            mock_client.chat.completions.create.call_args_list[0].kwargs["model"]
+            == "oss-120b"
+        )
+        assert (
+            mock_client.chat.completions.create.call_args_list[1].kwargs["model"]
+            == "backup-model"
+        )
+
+    def test_raises_when_all_models_fail(self) -> None:
+        from groq import GroqError
+        from src.agents.groq_agent import GroqAgent
+
+        with (
+            patch("src.agents.groq_agent.GROQ_MODEL", "oss-120b,backup-model"),
+            patch("src.agents.groq_agent.AsyncGroq") as MockGroq,
+        ):
+            mock_client = MagicMock()
+            MockGroq.return_value = mock_client
+            first_error = GroqError("bad model")
+            last_error = GroqError("down")
+            mock_client.chat.completions.create = AsyncMock(
+                side_effect=[first_error, last_error]
+            )
+            agent = GroqAgent()
+            with pytest.raises(GroqError, match="down"):
+                asyncio.run(agent._call(_make_payload()))
+            assert mock_client.chat.completions.create.call_count == 2
 
 
 # ---------------------------------------------------------------------------
-# Orchestrator majority vote  (E12)
+# Orchestrator Groq-only flow  (E9)
 # ---------------------------------------------------------------------------
 
-class TestAgentOrchestratorMajority:
-    def _make_orchestrator_with_mocks(
-        self,
-        groq_action: TradingAction,
-        gemini_action: TradingAction,
-        openai_action: TradingAction,
-        openrouter_action: TradingAction,
-    ) -> AgentOrchestrator:
+class TestAgentOrchestratorGroqOnly:
+    def _make_orchestrator_with_mock(self) -> AgentOrchestrator:
         orch = AgentOrchestrator.__new__(AgentOrchestrator)
-
-        def _agent_mock(action: TradingAction, source: str) -> MagicMock:
-            m = MagicMock()
-            m.agent_id = source
-            m.degraded = False
-            m.analyse = AsyncMock(
-                return_value=_make_payload(action=action, confidence=0.75, source=source)
-            )
-            return m
-
-        orch._groq = _agent_mock(groq_action, "groq")
-        orch._gemini = _agent_mock(gemini_action, "gemini")
-        orch._openai = _agent_mock(openai_action, "openai")
-        orch._openrouter = _agent_mock(openrouter_action, "openrouter")
+        mock_agent = MagicMock()
+        mock_agent.agent_id = "groq"
+        mock_agent.degraded = False
+        orch._groq = mock_agent
         return orch
 
-    def test_unanimous_buy_produces_buy(self) -> None:
-        orch = self._make_orchestrator_with_mocks(
-            TradingAction.BUY, TradingAction.BUY, TradingAction.BUY, TradingAction.BUY
+    def test_returns_groq_payload(self) -> None:
+        orch = self._make_orchestrator_with_mock()
+        orch._groq.analyse = AsyncMock(
+            return_value=_make_payload(action=TradingAction.BUY, source="groq")
         )
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
+        result = asyncio.run(orch.run(_make_payload()))
         assert result.action == TradingAction.BUY
+        assert result.source == "groq"
 
-    def test_majority_sell_produces_sell(self) -> None:
-        orch = self._make_orchestrator_with_mocks(
-            TradingAction.SELL, TradingAction.SELL, TradingAction.SELL, TradingAction.BUY
-        )
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
-        assert result.action == TradingAction.SELL
-
-    def test_tie_vote_produces_hold(self) -> None:
-        """2 BUY vs 2 SELL → HOLD (no majority)."""
-        orch = self._make_orchestrator_with_mocks(
-            TradingAction.BUY, TradingAction.BUY,
-            TradingAction.SELL, TradingAction.SELL,
-        )
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
-        # 2 vs 2 is not ≥ 3 majority → HOLD
+    def test_groq_failure_returns_hold(self) -> None:
+        orch = self._make_orchestrator_with_mock()
+        orch._groq.analyse = AsyncMock(side_effect=AgentError("down"))
+        result = asyncio.run(orch.run(_make_payload()))
         assert result.action == TradingAction.HOLD
-
-    def test_all_hold_produces_hold(self) -> None:
-        orch = self._make_orchestrator_with_mocks(
-            TradingAction.HOLD, TradingAction.HOLD,
-            TradingAction.HOLD, TradingAction.HOLD,
-        )
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
-        assert result.action == TradingAction.HOLD
-
-    def test_one_agent_fails_still_majority(self) -> None:
-        """If one agent raises, remaining majority should still fire."""
-        orch = self._make_orchestrator_with_mocks(
-            TradingAction.BUY, TradingAction.BUY,
-            TradingAction.BUY, TradingAction.BUY,
-        )
-        # Make openrouter raise
-        orch._openrouter.analyse = AsyncMock(side_effect=AgentError("down"))
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
-        # 3 agents BUY ≥ required majority threshold → BUY
-        assert result.action == TradingAction.BUY
-
-    def test_all_agents_fail_produces_hold(self) -> None:
-        """When all agents fail the orchestrator must return HOLD."""
-        orch = self._make_orchestrator_with_mocks(
-            TradingAction.BUY, TradingAction.BUY,
-            TradingAction.BUY, TradingAction.BUY,
-        )
-        for agent in (orch._groq, orch._gemini, orch._openai, orch._openrouter):
-            agent.analyse = AsyncMock(side_effect=AgentError("down"))
-        result = asyncio.get_event_loop().run_until_complete(
-            orch.run(_make_payload())
-        )
-        assert result.action == TradingAction.HOLD
+        assert result.source == "groq"

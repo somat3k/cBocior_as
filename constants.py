@@ -62,23 +62,11 @@ CTRADER_HOST: str = (
 )
 CTRADER_PORT: int = 5035
 
-# ─── OpenAI ───────────────────────────────────────────────────────────────
-OPENAI_API_KEY: str = _req("OPENAI_API_KEY")
-OPENAI_MODEL: str = _opt("OPENAI_MODEL", "gpt-4o")
-
-# ─── Google Gemini ────────────────────────────────────────────────────────
-GEMINI_API_KEY: str = _req("GEMINI_API_KEY")
-GEMINI_MODEL: str = _opt("GEMINI_MODEL", "gemini-1.5-pro")
-
 # ─── Groq ─────────────────────────────────────────────────────────────────
 GROQ_API_KEY: str = _req("GROQ_API_KEY")
-GROQ_MODEL: str = _opt("GROQ_MODEL", "llama3-70b-8192")
-
-# ─── OpenRouter ───────────────────────────────────────────────────────────
-OPENROUTER_API_KEY: str = _req("OPENROUTER_API_KEY")
-OPENROUTER_MODEL: str = _opt("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
-OPENROUTER_BASE_URL: str = _opt(
-    "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+GROQ_MODEL: str = _opt(
+    "GROQ_MODEL",
+    "oss-120b,llama-3.1-70b-versatile,llama-3.1-8b-instant",
 )
 
 # ─── LangSmith ────────────────────────────────────────────────────────────
@@ -135,7 +123,7 @@ BOT_LOOP_INTERVAL_SECONDS: int = int(_opt("BOT_LOOP_INTERVAL_SECONDS", "10"))
 BOT_ANALYSIS_COOLDOWN_SECONDS: int = int(
     _opt("BOT_ANALYSIS_COOLDOWN_SECONDS", "60")
 )
-BOT_MAX_CONCURRENT_AGENTS: int = int(_opt("BOT_MAX_CONCURRENT_AGENTS", "4"))
+BOT_MAX_CONCURRENT_AGENTS: int = int(_opt("BOT_MAX_CONCURRENT_AGENTS", "1"))
 LOG_LEVEL: str = _opt("LOG_LEVEL", "INFO").upper()
 
 # ─── Training Symbols ─────────────────────────────────────────────────────

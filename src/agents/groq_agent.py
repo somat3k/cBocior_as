@@ -1,13 +1,13 @@
 """
-src/agents/groq_agent.py — Groq LLaMA-3 70B agent (high-speed path).
+src/agents/groq_agent.py — Groq OSS 120B agent (single decision path).
 
-Role: Rapid preliminary signal scoring.
+Role: Primary signal generation (configured via GROQ_MODEL).
 Target response time: < 10 seconds.
 """
 
 from __future__ import annotations
 
-from groq import AsyncGroq
+from groq import AsyncGroq, GroqError
 
 from constants import GROQ_API_KEY, GROQ_MODEL
 from src.agents.base_agent import BaseAgent
@@ -22,13 +22,18 @@ GROQ_TIMEOUT: int = 10
 
 
 class GroqAgent(BaseAgent):
-    """LLaMA-3 70B powered speed-optimised preliminary signal agent."""
+    """OSS 120B powered primary signal agent (via GROQ_MODEL)."""
 
     agent_id: str = "groq"
 
     def __init__(self) -> None:
         super().__init__(timeout=GROQ_TIMEOUT)
         self._client = AsyncGroq(api_key=GROQ_API_KEY)
+        self._models = self._parse_model_list(GROQ_MODEL)
+
+    @staticmethod
+    def _parse_model_list(raw: str) -> list[str]:
+        return [model.strip() for model in raw.split(",") if model.strip()]
 
     async def _call(self, payload: TradingPayload) -> TradingPayload:
         # Compact prompt to minimise tokens (< 500 tokens total)
@@ -50,21 +55,35 @@ class GroqAgent(BaseAgent):
 
         system_prompt, user_prompt = build_groq_prompts(compact)
 
-        logger.debug("Calling Groq", model=GROQ_MODEL)
-        response = await self._client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.0,
-            max_tokens=128,
-        )
+        if not self._models:
+            raise RuntimeError(
+                "No Groq models configured. Set GROQ_MODEL to a "
+                "comma-separated list of model IDs."
+            )
 
-        raw = response.choices[0].message.content or "{}"
-        result = self._parse_llm_response(raw, payload)
+        total_models = len(self._models)
+        for index, model in enumerate(self._models):
+            logger.debug("Calling Groq", model=model)
+            try:
+                response = await self._client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.0,
+                    max_tokens=128,
+                )
+            except GroqError as exc:
+                logger.warning("Groq model call failed", model=model, error=str(exc))
+                if index == total_models - 1:
+                    raise
+                continue
 
-        # Groq confidence capped at 0.6 (speed-only mode)
-        return result.model_copy(
-            update={"confidence": min(result.confidence, 0.6)}
-        )
+            raw = response.choices[0].message.content or "{}"
+            result = self._parse_llm_response(raw, payload)
+
+            # Groq confidence capped at 0.6 (speed-only mode)
+            return result.model_copy(
+                update={"confidence": min(result.confidence, 0.6)}
+            )

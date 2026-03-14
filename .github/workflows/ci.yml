@@ -55,7 +55,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install numpy pandas scipy scikit-learn joblib pytest pytest-asyncio pytest-mock \
                       pydantic pydantic-settings python-dotenv structlog ujson rich \
-                      lightgbm requests redis langsmith openai google-genai groq
+                      lightgbm requests redis langsmith groq
 
       - name: Run tests
         env:
@@ -65,10 +65,7 @@ jobs:
           CTRADER_ACCESS_TOKEN: ci_access_token
           CTRADER_ACCOUNT_ID: "12345678"
           CTRADER_ENVIRONMENT: DEMO
-          OPENAI_API_KEY: sk-ci-openai
-          GEMINI_API_KEY: AIza-ci-gemini
           GROQ_API_KEY: gsk_ci_groq
-          OPENROUTER_API_KEY: sk-or-ci
           LANGSMITH_API_KEY: ls__ci
           LANGSMITH_PROJECT: cBocior_as_ci
           LANGCHAIN_TRACING_V2: "false"
@@ -103,10 +100,7 @@ jobs:
           CTRADER_ACCESS_TOKEN: ${{ secrets.CTRADER_ACCESS_TOKEN }}
           CTRADER_ACCOUNT_ID: ${{ secrets.CTRADER_ACCOUNT_ID }}
           CTRADER_ENVIRONMENT: ${{ secrets.CTRADER_ENVIRONMENT }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
           LANGCHAIN_TRACING_V2: "true"

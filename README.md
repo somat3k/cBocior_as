@@ -4,10 +4,10 @@
 
 An autonomous AI-driven trading cBot for the cTrader platform.
 
-Combines Neural Networks, Quantum-inspired optimisation, and a multi-agent
-AI orchestration layer (Gemini, Groq, OpenRouter, OpenAI) to discover
-market patterns, evaluate indicators across multiple timeframes, and execute
-trades with comprehensive risk management.
+Combines Neural Networks, Quantum-inspired optimisation, and a Groq OSS 120B
+agent orchestration layer (configured via `GROQ_MODEL`) to discover market
+patterns, evaluate indicators across multiple timeframes, and execute trades
+with comprehensive risk management.
 
 ---
 
@@ -32,13 +32,9 @@ cTrader Open API (TCP/Protobuf)
   └── Cross-TF divergence + PhaseEstimator (FFT quantum-inspired)
          │
          ▼  (JSON payload)
-  AgentOrchestrator
-  ├── GroqAgent        (LLaMA-3 70B — speed-first preliminary)
-  ├── GeminiAgent      (Gemini 1.5 Pro — multi-TF synthesis)
-  ├── OpenAIAgent      (GPT-4o — trade justification)
-  └── OpenRouterAgent  (Claude 3.5 — consensus arbiter)
+  GroqAgent (OSS 120B via GROQ_MODEL — single-agent decision engine)
          │
-         ▼  (majority-vote payload)
+         ▼  (Groq payload)
   DecisionEngine ──► RiskManager ──► Execution
          │
          ▼  (JSON trace)
@@ -118,14 +114,15 @@ and merged into a unified feature vector for the models:
 
 ---
 
-## Multi-Agent Decision Protocol
+## Groq Decision Protocol
 
-1. **Groq** → rapid preliminary signal (< 10 s)
-2. **Gemini** → multi-timeframe pattern synthesis
-3. **OpenAI** → trade justification narrative
-4. **OpenRouter** → consensus arbitration (receives all three outputs)
-5. **DecisionEngine** → majority vote + confidence gate (>= 0.65)
-6. **RiskManager** → spread, drawdown, daily loss checks
+1. **Groq OSS 120B** (via `GROQ_MODEL`) → single-agent signal generation
+2. **DecisionEngine** → confidence gate (>= 0.65)
+3. **RiskManager** → spread, drawdown, daily loss checks
+
+`GROQ_MODEL` accepts a comma-separated list of model IDs. The Groq agent
+tries each model in order (first is preferred), falling back on the next
+model if the previous one errors.
 
 See [AGENTS.md](AGENTS.md) for full delegation rules.
 
@@ -148,11 +145,8 @@ cBocior_as/
 │   │   └── trainer.py          # Training pipeline
 │   ├── agents/
 │   │   ├── base_agent.py       # Abstract agent
-│   │   ├── gemini_agent.py     # Google Gemini 1.5 Pro
-│   │   ├── groq_agent.py       # Groq LLaMA-3 70B
-│   │   ├── openai_agent.py     # OpenAI GPT-4o
-│   │   ├── openrouter_agent.py # OpenRouter Claude 3.5
-│   │   └── orchestrator.py     # Fan-out + majority-vote orchestrator
+│   │   ├── groq_agent.py       # Groq OSS 120B (via GROQ_MODEL)
+│   │   └── orchestrator.py     # Groq-only orchestrator
 │   ├── analysis/
 │   │   ├── pattern_detector.py # Candlestick + price-action patterns
 │   │   ├── market_analyzer.py  # Regime classification + session filter
@@ -182,7 +176,7 @@ cBocior_as/
 See [SECRETS.md](SECRETS.md) for the complete list. Required secrets:
 
 - `CTRADER_CLIENT_ID`, `CTRADER_CLIENT_SECRET`, `CTRADER_ACCESS_TOKEN`, `CTRADER_ACCOUNT_ID`
-- `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`
+- `GROQ_API_KEY`
 - `LANGSMITH_API_KEY`
 
 ---

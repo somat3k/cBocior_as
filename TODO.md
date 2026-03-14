@@ -79,17 +79,14 @@ Status markers: `[ ]` pending · `[~]` in progress · `[x]` done
 ## Epic E — AI Agent Framework
 
 - [x] E1. Implement `BaseAgent` abstract class with retry + timeout logic
-- [x] E2. Implement `OpenAIAgent` (GPT-4o, LangSmith-traced)
-- [x] E3. Implement `GeminiAgent` (Gemini 1.5 Pro)
-- [x] E4. Implement `GroqAgent` (LLaMA 3 70B, low-latency path)
-- [x] E5. Implement `OpenRouterAgent` (consensus arbiter)
-- [x] E6. Implement `AgentOrchestrator` (fan-out + majority vote)
-- [ ] E7. Define LangSmith prompt templates for each agent role
-- [ ] E8. Build payload formatter injecting indicators + model signals
-- [x] E9. Implement agent degraded-mode fallback chain
-- [x] E10. Add per-agent rate-limit back-off with exponential jitter
-- [ ] E11. Unit tests: mock each provider, assert correct payload schema
-- [ ] E12. Integration test: orchestrator with 4 mock agents, assert majority rule
+- [x] E2. Implement `GroqAgent` (OSS 120B, low-latency path)
+- [x] E3. Implement `AgentOrchestrator` (Groq-only flow)
+- [ ] E4. Define LangSmith prompt templates for Groq
+- [ ] E5. Build payload formatter injecting indicators + model signals
+- [x] E6. Implement agent degraded-mode fallback chain
+- [x] E7. Add per-agent rate-limit back-off with exponential jitter
+- [ ] E8. Unit tests: mock Groq provider, assert correct payload schema
+- [ ] E9. Integration test: orchestrator with Groq mock, assert HOLD fallback
 
 ---
 
@@ -191,16 +188,13 @@ Status markers: `[ ]` pending · `[~]` in progress · `[x]` done
 
 ## Epic L — LangSmith Prompt Engineering
 
-- [ ] L1. Define base prompt templates for each agent role
+- [ ] L1. Define base prompt template for Groq OSS 120B
 - [ ] L2. Implement `PromptBuilder` using LangSmith's prompt hub
 - [ ] L3. Groq speed-optimised prompt (< 500 tokens)
-- [ ] L4. Gemini multi-timeframe analysis prompt
-- [ ] L5. OpenAI trade justification prompt
-- [ ] L6. OpenRouter consensus prompt with all agent inputs
-- [ ] L7. Prompt versioning in LangSmith
-- [ ] L8. Prompt performance metrics (win-rate by prompt version)
-- [ ] L9. Feedback loop: human ratings pushed back to LangSmith
-- [ ] L10. A/B test new prompt versions against baseline
+- [ ] L4. Prompt versioning in LangSmith
+- [ ] L5. Prompt performance metrics (win-rate by prompt version)
+- [ ] L6. Feedback loop: human ratings pushed back to LangSmith
+- [ ] L7. A/B test new prompt versions against baseline
 
 ---
 
@@ -475,17 +469,14 @@ Status markers: `[ ]` pending · `[~]` in progress · `[x]` done
 ## Epic E — AI Agent Framework
 
 - [ ] E1. Implement `BaseAgent` abstract class with retry + timeout logic
-- [ ] E2. Implement `OpenAIAgent` (GPT-4o, LangSmith-traced)
-- [ ] E3. Implement `GeminiAgent` (Gemini 1.5 Pro)
-- [ ] E4. Implement `GroqAgent` (LLaMA 3 70B, low-latency path)
-- [ ] E5. Implement `OpenRouterAgent` (consensus arbiter)
-- [ ] E6. Implement `AgentOrchestrator` (fan-out + majority vote)
-- [ ] E7. Define LangSmith prompt templates for each agent role
-- [ ] E8. Build payload formatter injecting indicators + model signals
-- [ ] E9. Implement agent degraded-mode fallback chain
-- [ ] E10. Add per-agent rate-limit back-off with exponential jitter
-- [ ] E11. Unit tests: mock each provider, assert correct payload schema
-- [ ] E12. Integration test: orchestrator with 4 mock agents, assert majority rule
+- [ ] E2. Implement `GroqAgent` (OSS 120B, low-latency path)
+- [ ] E3. Implement `AgentOrchestrator` (Groq-only flow)
+- [ ] E4. Define LangSmith prompt templates for Groq
+- [ ] E5. Build payload formatter injecting indicators + model signals
+- [ ] E6. Implement agent degraded-mode fallback chain
+- [ ] E7. Add per-agent rate-limit back-off with exponential jitter
+- [ ] E8. Unit tests: mock Groq provider, assert correct payload schema
+- [ ] E9. Integration test: orchestrator with Groq mock, assert HOLD fallback
 
 ---
 
@@ -587,16 +578,13 @@ Status markers: `[ ]` pending · `[~]` in progress · `[x]` done
 
 ## Epic L — LangSmith Prompt Engineering
 
-- [ ] L1. Define base prompt templates for each agent role
+- [ ] L1. Define base prompt template for Groq OSS 120B
 - [ ] L2. Implement `PromptBuilder` using LangSmith's prompt hub
 - [ ] L3. Groq speed-optimised prompt (< 500 tokens)
-- [ ] L4. Gemini multi-timeframe analysis prompt
-- [ ] L5. OpenAI trade justification prompt
-- [ ] L6. OpenRouter consensus prompt with all agent inputs
-- [ ] L7. Prompt versioning in LangSmith
-- [ ] L8. Prompt performance metrics (win-rate by prompt version)
-- [ ] L9. Feedback loop: human ratings pushed back to LangSmith
-- [ ] L10. A/B test new prompt versions against baseline
+- [ ] L4. Prompt versioning in LangSmith
+- [ ] L5. Prompt performance metrics (win-rate by prompt version)
+- [ ] L6. Feedback loop: human ratings pushed back to LangSmith
+- [ ] L7. A/B test new prompt versions against baseline
 
 ---
 

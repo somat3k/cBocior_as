@@ -54,15 +54,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Indicator reference tests** (D12) — `tests/test_indicator_reference.py`
   validates RSI, MACD, Bollinger Bands, EMA, ATR, and Stochastic against
   known reference behaviours.
-- **Agent unit tests** (E11) and **orchestrator integration tests** (E12) —
-  `tests/test_agents.py` mocks all four LLM providers and asserts majority-vote
-  logic, retry/degraded behaviour, and payload schema.
+- **Agent unit tests** (E8) and **orchestrator integration tests** (E9) —
+  `tests/test_agents.py` mocks the Groq provider and asserts fallback
+  behaviour, retry/degraded logic, and payload schema.
 - **Trainer integration test** (C14) — `tests/test_trainer_integration.py`
   trains on synthetic data and asserts artefact creation, registry, and predict.
 - **Rich progress bar** (C15) — `ModelTrainer.train_all()` shows a `rich`
   progress bar when the library is available.
 
 ### Changed
+- Groq OSS 120B (via `GROQ_MODEL`) is now the sole agent provider; other agent
+  integrations were removed along with their dependencies and configuration
+  requirements.
 - `RiskFlags` in `payload.py` gains `emergency_halt: bool` field; `merge_payloads`
   and `any_flag` updated accordingly.
 
@@ -107,9 +110,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`src/trading/execution.py`).
 - `BaseAgent` abstract class with retry, timeout, exponential back-off, and
   LangSmith tracing (`src/agents/base_agent.py`).
-- OpenAI, Gemini, Groq, OpenRouter agent implementations.
-- `AgentOrchestrator` — fan-out + majority-vote consensus
-  (`src/agents/orchestrator.py`).
+- Groq agent implementation.
+- `AgentOrchestrator` — Groq-only orchestration (`src/agents/orchestrator.py`).
 - `TradingPayload` Pydantic schema, `PayloadBuilder` fluent API, HMAC-SHA256
   signing (`src/utils/payload.py`).
 - Redis-backed market data cache (`src/utils/cache.py`).

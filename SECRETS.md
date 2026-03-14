@@ -23,34 +23,12 @@ When running locally, copy `.env.example` to `.env` and populate it.
 | `CTRADER_ACCOUNT_ID` | Numeric cTrader account ID | cTrader platform → Accounts |
 | `CTRADER_ENVIRONMENT` | `LIVE` or `DEMO` | User-defined |
 
-### OpenAI
-
-| Secret name | Description | Where to get it |
-|---|---|---|
-| `OPENAI_API_KEY` | OpenAI API key (`sk-...`) | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
-| `OPENAI_MODEL` | Model identifier (default `gpt-4o`) | Optional override |
-
-### Google Gemini
-
-| Secret name | Description | Where to get it |
-|---|---|---|
-| `GEMINI_API_KEY` | Google AI Studio API key (`AIza...`) | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
-| `GEMINI_MODEL` | Model identifier (default `gemini-1.5-pro`) | Optional override |
-
 ### Groq
 
 | Secret name | Description | Where to get it |
 |---|---|---|
 | `GROQ_API_KEY` | Groq Cloud API key (`gsk_...`) | [console.groq.com/keys](https://console.groq.com/keys) |
-| `GROQ_MODEL` | Model identifier (default `llama3-70b-8192`) | Optional override |
-
-### OpenRouter
-
-| Secret name | Description | Where to get it |
-|---|---|---|
-| `OPENROUTER_API_KEY` | OpenRouter API key (`sk-or-...`) | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `OPENROUTER_MODEL` | Model path (default `anthropic/claude-3.5-sonnet`) | Optional override |
-| `OPENROUTER_BASE_URL` | Base URL (default `https://openrouter.ai/api/v1`) | Optional override |
+| `GROQ_MODEL` | Comma-separated model list (default `oss-120b,llama-3.1-70b-versatile,llama-3.1-8b-instant`) | Optional override |
 
 ### LangSmith
 
