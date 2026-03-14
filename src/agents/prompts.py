@@ -48,7 +48,7 @@ _OPENAI_SYSTEM = (
 
 _OPENAI_USER = (
     "Analyse the following market data and produce a trading signal:\n\n"
-    "{market_data}"
+    "$market_data"
 )
 
 _GEMINI_PROMPT = (
@@ -65,7 +65,7 @@ _GEMINI_PROMPT = (
     "timeframes.\n"
     "- Default to HOLD on divergence.\n"
     "- Confidence range: 0.0 (no signal) to 1.0 (strong confluence).\n\n"
-    "Market data:\n{market_data}"
+    "Market data:\n$market_data"
 )
 
 _GROQ_SYSTEM = (
@@ -74,7 +74,7 @@ _GROQ_SYSTEM = (
     '"reasoning":"<30 words"}. Be decisive and fast.'
 )
 
-_GROQ_USER = "Market snapshot: {snapshot}"
+_GROQ_USER = "Market snapshot: $snapshot"
 
 _OPENROUTER_SYSTEM = (
     "You are the final consensus arbiter for a multi-agent algorithmic "
@@ -94,7 +94,7 @@ _OPENROUTER_SYSTEM = (
 
 _OPENROUTER_USER = (
     "Produce the final consensus trading signal for this payload:\n\n"
-    "{market_data}"
+    "$market_data"
 )
 
 
@@ -193,10 +193,7 @@ def _resolve_template(key: str, fallback: str) -> str:
 
 
 def _inject_context(template: str, context: dict[str, Any]) -> str:
-    rendered = template
-    for key, value in context.items():
-        rendered = rendered.replace(f"{{{key}}}", str(value))
-    return Template(rendered).safe_substitute(context)
+    return Template(template).safe_substitute(context)
 
 
 # ---------------------------------------------------------------------------

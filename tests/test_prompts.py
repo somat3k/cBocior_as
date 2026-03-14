@@ -17,13 +17,12 @@ class TestPromptTemplates:
         system, user = build_openai_prompts("market-data")
         assert "BUY|SELL|HOLD" in system
         assert "market-data" in user
-        assert "{market_data}" not in user
+        assert "$market_data" not in user
 
     def test_gemini_prompt_includes_market_data(self) -> None:
         prompt = build_gemini_prompt("gemini-market")
         assert "gemini-market" in prompt
         assert "multi-timeframe" in prompt.lower()
-        assert "1m, 5m, and 1h" in prompt.lower()
         assert "1M, 5M, and 1H" in prompt
         assert "timeframe_divergence" in prompt
 
