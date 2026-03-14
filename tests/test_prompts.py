@@ -4,12 +4,30 @@ tests/test_prompts.py — Unit tests for agent prompt templates.
 
 from __future__ import annotations
 
+import pytest
+
 from src.agents.prompts import (
     build_gemini_prompt,
     build_groq_prompts,
     build_openai_prompts,
     build_openrouter_prompts,
 )
+
+_LANGSMITH_PROMPT_ENV_VARS = (
+    "LANGSMITH_PROMPT_OPENAI_SYSTEM",
+    "LANGSMITH_PROMPT_OPENAI_USER",
+    "LANGSMITH_PROMPT_GEMINI",
+    "LANGSMITH_PROMPT_GROQ_SYSTEM",
+    "LANGSMITH_PROMPT_GROQ_USER",
+    "LANGSMITH_PROMPT_OPENROUTER_SYSTEM",
+    "LANGSMITH_PROMPT_OPENROUTER_USER",
+)
+
+
+@pytest.fixture(autouse=True)
+def _clear_langsmith_prompt_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in _LANGSMITH_PROMPT_ENV_VARS:
+        monkeypatch.delenv(key, raising=False)
 
 
 class TestPromptTemplates:

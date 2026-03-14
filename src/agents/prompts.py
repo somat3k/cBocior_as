@@ -197,10 +197,17 @@ def _prompt_id(key: str) -> str | None:
     return value or None
 
 
+@lru_cache(maxsize=32)
+def _resolve_template_cached(key: str, prompt_id: str | None) -> str | None:
+    if not prompt_id:
+        return None
+    return _prompt_hub().pull(prompt_id)
+
+
 def _resolve_template(key: str, fallback: str) -> str:
     prompt_id = _prompt_id(key)
     if prompt_id:
-        template = _prompt_hub().pull(prompt_id)
+        template = _resolve_template_cached(key, prompt_id)
         if template:
             return template
         logger.warning(
@@ -220,6 +227,12 @@ def _inject_context(template: str, context: dict[str, Any]) -> str:
         raise ValueError(
             f"Missing prompt template variable '{missing}' in template: "
             f"'{snippet}'"
+        ) from exc
+    except ValueError as exc:
+        snippet = template[:160].replace("\n", "\\n")
+        raise ValueError(
+            "Invalid prompt template placeholder; escape literal '$' as '$$'. "
+            f"Template: '{snippet}'"
         ) from exc
 
 
