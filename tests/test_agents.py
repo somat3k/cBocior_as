@@ -252,6 +252,7 @@ class TestGroqAgent:
             with pytest.raises(GroqError) as excinfo:
                 asyncio.run(agent._call(_make_payload()))
             assert str(excinfo.value) == "down"
+            assert mock_client.chat.completions.create.call_count == 2
 
 
 # ---------------------------------------------------------------------------
