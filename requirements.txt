@@ -13,7 +13,7 @@ pandas>=2.2.1
 scipy>=1.13.0
 
 # ── Machine Learning (no TF/Torch/ONNX) ─────────────────────────────────────
-scikit-learn>=1.4.2
+scikit-learn>=1.8.0
 joblib>=1.4.0
 xgboost>=2.0.3
 lightgbm>=4.3.0
