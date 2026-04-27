@@ -9,7 +9,7 @@ twisted>=24.3.0
 
 # ── Data / Numerical ─────────────────────────────────────────────────────────
 numpy>=1.26.4
-pandas>=2.2.1
+pandas>=2.3.3
 scipy>=1.13.0
 
 # ── Machine Learning (no TF/Torch/ONNX) ─────────────────────────────────────
